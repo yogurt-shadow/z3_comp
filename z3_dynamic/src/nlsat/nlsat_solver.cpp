@@ -452,11 +452,7 @@ namespace nlsat {
         }
 
         bool only_left_bool(bool_var b, var x) const {
-            if (!is_arith_atom(b))
-                return false;
-            else{
-                return only_left_atom(m_atoms[b], x);
-            }
+            return is_arith_atom(b) ? only_left_atom(m_atoms[b], x) : false;
         }
 
         bool only_left_literal(literal l, var x) const {
@@ -467,8 +463,34 @@ namespace nlsat {
             return a->is_ineq_atom() ? all_assigned_ineq(to_ineq_atom(a)) : all_assigned_root(to_root_atom(a));
         }
 
-        bool all_assigned_ineq() const {
-            
+        bool all_assigned_ineq(ineq_atom const * a) const {
+            var_vector curr_vars;
+            for(unsigned i = 0; i < a->size(); i++){
+                var_vector curr;
+                m_pm.vars(a->p(i), curr);
+                for(var v: curr){
+                    if(!curr_vars.contains(v)){
+                        curr_vars.push_back(v);
+                    }
+                }
+            }
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool all_assigned_root(root_atom const * a) const {
+            var_vector curr_vars;
+            m_pm.vars(a->p(), curr_vars);
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return false;
+                }
+            }
+            return m_assignment.is_assigned(a->m_x);
         }
         // hzw max var
         // hzw dynamic
@@ -1267,7 +1289,7 @@ namespace nlsat {
             val = to_lbool(m_evaluator.eval(a, l.sign()));
             TRACE("nlsat_verbose", display(tout << " evaluated value " << val << " for ", l) << "\n";);
             TRACE("value_bug", tout << "value of: "; display(tout, l); tout << " := " << val << "\n"; 
-                  tout << "xk: " << m_xk << ", a->max_var(): " << a->max_var() << "\n";
+                  tout << "xk: " << m_xk << "\n";
                   display_assignment(tout););            
             return val;
         }
@@ -1504,28 +1526,6 @@ namespace nlsat {
             return nullptr; // succeeded
         }
 
-        // wzh dynamic
-        // -----------------------
-        //
-        // Dynamic Ordering
-        //
-        // -----------------------
-        clause_vector find_max_var(var x){
-            clause_vector res;
-            for(var v = 0; v < m_watches.size(); v++){
-                fill_max_var(m_watches[v], res, x);
-            }
-            return res;
-        }
-
-        void fill_max_var(clause_vector const & clauses, clause_vector & res, var x){
-            for(clause * cls: clauses){
-                if(max_var(*cls) == x){
-                    res.push_back(cls);
-                }
-            }
-        }
-        // hzw dynamic
 
         /**
            \brief Make sure m_bk is the first unassigned pure Boolean variable.
