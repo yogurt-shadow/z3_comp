@@ -1,0 +1,20 @@
+z3_add_component(nlsat
+  SOURCES
+    nlsat_clause.cpp
+    nlsat_evaluator.cpp
+    nlsat_explain.cpp
+    nlsat_interval_set.cpp
+    nlsat_solver.cpp
+    nlsat_types.cpp
+    nlsat_equal.cpp
+    nlsat_peo.cpp
+    nlsat_cac.cpp
+    nlsat_partial.cpp 
+    nlsat_subtropical.cpp
+    nlsat_incremental_cad.cpp
+  COMPONENT_DEPENDENCIES
+    polynomial
+    sat
+  PYG_FILES
+    nlsat_params.pyg
+)
