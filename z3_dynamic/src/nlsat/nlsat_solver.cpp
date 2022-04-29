@@ -118,7 +118,7 @@ namespace nlsat {
         id_gen                 m_bid_gen;
 
         bool_vector          m_is_int;     // m_is_int[x] is true if variable is integer
-        vector<clause_vector>  m_watches;    // var -> clauses where variable is maximal
+        // vector<clause_vector>  m_watches;    // var -> clauses where variable is maximal
         interval_set_vector    m_infeasible; // var -> to a set of interval where the variable cannot be assigned to.
         atom_vector            m_var2eq;     // var -> to asserted equality
         var_vector             m_perm;       // var -> var permutation of the variables
@@ -384,6 +384,16 @@ namespace nlsat {
 
         // wzh dynamic
         // wzh max var
+        bool all_bool_clause(clause const & cls) const {
+            for(unsigned i = 0; i < cls.size(); i++){
+                literal l = cls[i];
+                if(is_arith_literal(l)){
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool only_left(poly const * p, var x) const {
             var_vector curr_vars;
             m_pm.vars(p, curr_vars);
@@ -507,9 +517,10 @@ namespace nlsat {
             return b;
         }
 
-        /**
-           \brief Return the degree of the maximal variable of the given atom
-        */
+        // // wzh dynamic
+        // /**
+        //    \brief Return the degree of the maximal variable of the given atom
+        // */
         // unsigned degree(atom const * a) const {
         //     if (a->is_ineq_atom()) {
         //         unsigned max = 0;
@@ -526,6 +537,7 @@ namespace nlsat {
         //         return m_pm.degree(to_root_atom(a)->p(), a->max_var());
         //     }
         // }
+        // hzw dynamic
 
         // /**
         //    \brief Return the degree of the maximal variable in c
@@ -576,12 +588,12 @@ namespace nlsat {
         void register_var(var x, bool is_int) {
             SASSERT(x == num_vars());
             m_is_int.    push_back(is_int);
-            m_watches.   push_back(clause_vector());
+            // m_watches.   push_back(clause_vector());
             m_infeasible.push_back(0);
             m_var2eq.    push_back(nullptr);
             m_perm.      push_back(x);
             m_inv_perm.  push_back(x);
-            SASSERT(m_is_int.size() == m_watches.size());
+            // SASSERT(m_is_int.size() == m_watches.size());
             SASSERT(m_is_int.size() == m_infeasible.size());
             SASSERT(m_is_int.size() == m_var2eq.size());
             SASSERT(m_is_int.size() == m_perm.size());
@@ -786,22 +798,30 @@ namespace nlsat {
         }
 
         void attach_clause(clause & cls) {
-            var x      = max_var(cls);
-            if (x != null_var) {
-                m_watches[x].push_back(&cls);
-            }
-            else {
+            // var x      = max_var(cls);
+            // if (x != null_var) {
+            //     m_watches[x].push_back(&cls);
+            // }
+            // else {
+            //     bool_var b = max_bvar(cls);
+            //     m_bwatches[b].push_back(&cls);
+            // }
+            if(all_bool_clause(cls)){
                 bool_var b = max_bvar(cls);
                 m_bwatches[b].push_back(&cls);
             }
         }
 
         void deattach_clause(clause & cls) {
-            var x      = max_var(cls);
-            if (x != null_var) {
-                m_watches[x].erase(&cls);
-            }
-            else {
+            // var x      = max_var(cls);
+            // if (x != null_var) {
+            //     m_watches[x].erase(&cls);
+            // }
+            // else {
+            //     bool_var b = max_bvar(cls);
+            //     m_bwatches[b].erase(&cls);
+            // }
+            if(all_bool_clause(cls)){
                 bool_var b = max_bvar(cls);
                 m_bwatches[b].erase(&cls);
             }
@@ -936,11 +956,11 @@ namespace nlsat {
                 }
                 else if (a->is_root_atom()) {
                     root_atom& r = *to_root_atom(a);
-                    if (r.x() >= max_var(r.p())) {
-                        // permutation may be reverted after check completes, 
-                        // but then root atoms are not used in lemmas.
-                        bv = checker.mk_root_atom(r.get_kind(), r.x(), r.i(), r.p());
-                    }
+                    // if (r.x() >= max_var(r.p())) {
+                    //     // permutation may be reverted after check completes, 
+                    //     // but then root atoms are not used in lemmas.
+                    //     bv = checker.mk_root_atom(r.get_kind(), r.x(), r.i(), r.p());
+                    // }
                 }
                 else {
                     UNREACHABLE();
@@ -1401,10 +1421,10 @@ namespace nlsat {
                 break;
             }
             var x = m_xk;
-            SASSERT(a->max_var() == x);
-            SASSERT(x != null_var);
-            if (m_var2eq[x] != 0 && degree(m_var2eq[x]) <= degree(a))
-                return; // we only update m_var2eq if the new equality has smaller degree
+            // SASSERT(a->max_var() == x);
+            // SASSERT(x != null_var);
+            // if (m_var2eq[x] != 0 && degree(m_var2eq[x]) <= degree(a))
+                // return; // we only update m_var2eq if the new equality has smaller degree
             TRACE("nlsat_simplify_core", tout << "Saving equality for "; m_display_var(tout, x) << " (x" << x << ") ";
                   tout << "scope-lvl: " << scope_lvl() << "\n"; display(tout, literal(b, false)) << "\n";
                   display(tout, j);
@@ -1436,9 +1456,9 @@ namespace nlsat {
                     continue;
                 if (value(l) == l_true)
                     return true;  // could happen if clause is a tautology
-                CTRACE("nlsat", max_var(l) != m_xk || value(l) != l_undef, display(tout); 
-                       tout << "xk: " << m_xk << ", max_var(l): " << max_var(l) << ", l: "; display(tout, l) << "\n";
-                       display(tout, cls) << "\n";);
+                // CTRACE("nlsat", max_var(l) != m_xk || value(l) != l_undef, display(tout); 
+                //        tout << "xk: " << m_xk << ", max_var(l): " << max_var(l) << ", l: "; display(tout, l) << "\n";
+                //        display(tout, cls) << "\n";);
                 SASSERT(value(l) == l_undef);
                 SASSERT(max_var(l) == m_xk);
                 bool_var b = l.var();
@@ -2639,12 +2659,12 @@ namespace nlsat {
                     if (x > max)
                         max = x;
                 }
-                a->m_max_var = max;
+                // a->m_max_var = max;
             }
             else {
                 poly * p = to_root_atom(a)->p();
                 VERIFY(m_cache.mk_unique(p) == p);
-                a->m_max_var = m_pm.max_var(p);
+                // a->m_max_var = m_pm.max_var(p);
             }
         }
 
@@ -2655,13 +2675,13 @@ namespace nlsat {
             }
         }
 
-        void reattach_arith_clauses(clause_vector const & cs) {
-            for (clause* cp : cs) {
-                var x = max_var(*cp);
-                if (x != null_var)
-                    m_watches[x].push_back(cp);
-            }
-        }
+        // void reattach_arith_clauses(clause_vector const & cs) {
+        //     for (clause* cp : cs) {
+        //         var x = max_var(*cp);
+        //         if (x != null_var)
+        //             m_watches[x].push_back(cp);
+        //     }
+        // }
 
         // -----------------------
         //
@@ -2681,23 +2701,23 @@ namespace nlsat {
             }
         };
 
-        unsigned_vector m_cs_degrees;
-        unsigned_vector m_cs_p;
-        void sort_clauses_by_degree(unsigned sz, clause ** cs) {
-            if (sz <= 1)
-                return;
-            TRACE("nlsat_reorder_clauses", tout << "before:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
-            m_cs_degrees.reset();
-            m_cs_p.reset();
-            for (unsigned i = 0; i < sz; i++) {
-                m_cs_p.push_back(i);
-                m_cs_degrees.push_back(degree(*(cs[i])));
-            }
-            std::sort(m_cs_p.begin(), m_cs_p.end(), degree_lt(m_cs_degrees));
-            TRACE("nlsat_reorder_clauses", tout << "permutation: "; ::display(tout, m_cs_p.begin(), m_cs_p.end()); tout << "\n";);
-            apply_permutation(sz, cs, m_cs_p.data());
-            TRACE("nlsat_reorder_clauses", tout << "after:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
-        }
+        // unsigned_vector m_cs_degrees;
+        // unsigned_vector m_cs_p;
+        // void sort_clauses_by_degree(unsigned sz, clause ** cs) {
+        //     if (sz <= 1)
+        //         return;
+        //     TRACE("nlsat_reorder_clauses", tout << "before:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
+        //     m_cs_degrees.reset();
+        //     m_cs_p.reset();
+        //     for (unsigned i = 0; i < sz; i++) {
+        //         m_cs_p.push_back(i);
+        //         m_cs_degrees.push_back(degree(*(cs[i])));
+        //     }
+        //     std::sort(m_cs_p.begin(), m_cs_p.end(), degree_lt(m_cs_degrees));
+        //     TRACE("nlsat_reorder_clauses", tout << "permutation: "; ::display(tout, m_cs_p.begin(), m_cs_p.end()); tout << "\n";);
+        //     apply_permutation(sz, cs, m_cs_p.data());
+        //     TRACE("nlsat_reorder_clauses", tout << "after:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
+        // }
 
         void sort_watched_clauses() {
             unsigned num = num_vars();

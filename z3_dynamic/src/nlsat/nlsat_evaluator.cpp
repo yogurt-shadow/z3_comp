@@ -487,12 +487,12 @@ namespace nlsat {
             return sign;
         }
         
-        interval_set_ref infeasible_intervals(ineq_atom * a, bool neg, clause const* cls) {
+        interval_set_ref infeasible_intervals(ineq_atom * a, bool neg, clause const* cls, var x) {
             sign_table & table = m_sign_table_tmp;
             table.reset();
             TRACE("nsat_evaluator", m_solver.display(tout, *a) << "\n";);
             unsigned num_ps = a->size();
-            var x = a->max_var();
+            // var x = a->max_var();
             for (unsigned i = 0; i < num_ps; i++) {
                 add(a->p(i), x, table);
                 TRACE("nlsat_evaluator_bug", tout << "table after:\n"; m_pm.display(tout, a->p(i)); tout << "\n"; table.display_raw(tout);); 
@@ -592,7 +592,7 @@ namespace nlsat {
             return result;
         }
 
-        interval_set_ref infeasible_intervals(root_atom * a, bool neg, clause const* cls) {
+        interval_set_ref infeasible_intervals(root_atom * a, bool neg, clause const* cls, var x) {
             atom::kind k = a->get_kind();
             unsigned i = a->i();
             SASSERT(i > 0);
@@ -600,7 +600,7 @@ namespace nlsat {
             anum dummy;
             scoped_anum_vector & roots = m_tmp_values;
             roots.reset();
-            var x = a->max_var();
+            // var x = a->max_var();
             // Note: I added undef_var_assignment in the following statement, to allow us to obtain the infeasible interval sets
             // even when the maximal variable is assigned. I need this feature to minimize conflict cores.
             m_am.isolate_roots(polynomial_ref(a->p(), m_pm), undef_var_assignment(m_assignment, x), roots);
