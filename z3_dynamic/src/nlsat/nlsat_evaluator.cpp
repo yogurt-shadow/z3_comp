@@ -487,7 +487,7 @@ namespace nlsat {
             return sign;
         }
         
-        interval_set_ref infeasible_intervals(ineq_atom * a, bool neg, clause const* cls, var x) {
+        interval_set_ref infeasible_intervals_ineq(ineq_atom * a, bool neg, clause const* cls, var x) {
             sign_table & table = m_sign_table_tmp;
             table.reset();
             TRACE("nsat_evaluator", m_solver.display(tout, *a) << "\n";);
@@ -592,7 +592,7 @@ namespace nlsat {
             return result;
         }
 
-        interval_set_ref infeasible_intervals(root_atom * a, bool neg, clause const* cls, var x) {
+        interval_set_ref infeasible_intervals_root(root_atom * a, bool neg, clause const* cls, var x) {
             atom::kind k = a->get_kind();
             unsigned i = a->i();
             SASSERT(i > 0);
@@ -663,8 +663,8 @@ namespace nlsat {
             return result;
         }
         
-        interval_set_ref infeasible_intervals(atom * a, bool neg, clause const* cls) {
-            return a->is_ineq_atom() ? infeasible_intervals(to_ineq_atom(a), neg, cls) : infeasible_intervals(to_root_atom(a), neg, cls); 
+        interval_set_ref infeasible_intervals(atom * a, bool neg, clause const* cls, var x) {
+            return a->is_ineq_atom() ? infeasible_intervals_ineq(to_ineq_atom(a), neg, cls, x) : infeasible_intervals_root(to_root_atom(a), neg, cls, x); 
         }
     };
     
@@ -684,8 +684,8 @@ namespace nlsat {
         return m_imp->eval(a, neg);
     }
         
-    interval_set_ref evaluator::infeasible_intervals(atom * a, bool neg, clause const* cls) {
-        return m_imp->infeasible_intervals(a, neg, cls);
+    interval_set_ref evaluator::infeasible_intervals(atom * a, bool neg, clause const* cls, var x) {
+        return m_imp->infeasible_intervals(a, neg, cls, x);
     }
 
     void evaluator::push() {

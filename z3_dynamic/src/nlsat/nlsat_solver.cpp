@@ -551,13 +551,6 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left_bool(bool_var b, var x) const {
-            if(!is_arith_atom(b)){
-                return false;
-            }
-            return only_left_atom(m_atoms[b], x);
-        }
-
         bool only_left_atom(atom const * a, var x) const {
             return a->is_ineq_atom() ? only_left_ineq(to_ineq_atom(a), x) : only_left_root(to_root_atom(a), x);
         }
@@ -1619,7 +1612,7 @@ namespace nlsat {
                 TRACE("nlsat", tout << "skip learned\n";);
                 return true; // ignore lemmas in super lazy mode
             }
-            SASSERT(m_xk == max_var(cls));
+            // SASSERT(m_xk == max_var(cls));
             unsigned num_undef   = 0;                // number of undefined literals
             unsigned first_undef = UINT_MAX;         // position of the first undefined literal
             interval_set_ref first_undef_set(m_ism); // infeasible region of the first undefined literal
@@ -1641,7 +1634,8 @@ namespace nlsat {
                 atom * a   = m_atoms[b];
                 SASSERT(a != nullptr);
                 interval_set_ref curr_set(m_ism);
-                curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls);
+                // curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls);
+                curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls, m_xk);
                 TRACE("nlsat_inf_set", tout << "infeasible set for literal: "; display(tout, l); tout << "\n"; m_ism.display(tout, curr_set); tout << "\n";
                       display(tout, cls) << "\n";); 
                 if (m_ism.is_empty(curr_set)) {
@@ -1751,16 +1745,20 @@ namespace nlsat {
             //     m_xk++;
             // }
             // hzw dynamic
-            select_arith_var();
+            select_next_arith_var();
         }
 
         // wzh dynamic
-        void select_arith_var(){
+        void select_next_arith_var(){
             if(m_xk == null_var){
                 m_xk = 0;
+                m_dynamic_vars.push_back(m_xk);
             }
             else {
                 m_xk++;
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                }
             }
             m_dynamic_vars.push_back(m_xk);
         }
@@ -1785,7 +1783,8 @@ namespace nlsat {
         
 
         bool is_satisfied() {
-            if (m_bk == null_bool_var && m_xk >= num_vars()) {
+            // if (m_bk == null_bool_var && m_xk >= num_vars()) {
+            if(m_bk == null_bool_var && m_dynamic_vars.size() > num_vars()){
                 TRACE("nlsat", tout << "found model\n"; display_assignment(tout););
                 fix_patch();
                 SASSERT(check_satisfied(m_clauses));
