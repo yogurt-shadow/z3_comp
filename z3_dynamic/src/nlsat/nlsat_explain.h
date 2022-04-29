@@ -61,7 +61,8 @@ namespace nlsat {
                  - s_1, ..., s_m do not contain variable x.
                  - s_1, ..., s_m are false in the current interpretation
         */
-        void operator()(unsigned n, literal const * ls, scoped_literal_vector & result);
+        // void operator()(unsigned n, literal const * ls, scoped_literal_vector & result);
+        void operator()(unsigned n, literal const * ls, var_vector const & dynamic, scoped_literal_vector & result);
 
         
         /**

@@ -46,6 +46,10 @@ namespace nlsat {
         bool                    m_factor;
         bool                    m_signed_project;
 
+        // wzh dynamic
+        var_vector m_dynamic_vars;
+        // hzw dynamic
+
         struct todo_set {
             polynomial::cache  &    m_cache;
             polynomial_ref_vector   m_set;
@@ -507,51 +511,214 @@ namespace nlsat {
             C.shrink(j);
         }
 
-        var max_var(poly const * p) { return m_pm.max_var(p); }
+        // var max_var(poly const * p) { return m_pm.max_var(p); }
 
-        /**
-           \brief Return the maximal variable in a set of nonconstant polynomials.
-        */
-        var max_var(polynomial_ref_vector const & ps) {
-            if (ps.empty())
-                return null_var;
-            var max = max_var(ps.get(0)); 
-            SASSERT(max != null_var); // there are no constant polynomials in ps
-            unsigned sz = ps.size();
-            for (unsigned i = 1; i < sz; i++) {
-                var curr = m_pm.max_var(ps.get(i));
-                SASSERT(curr != null_var);
-                if (curr > max)
-                    max = curr;
-            }
-            return max;
-        }
+        // /**
+        //    \brief Return the maximal variable in a set of nonconstant polynomials.
+        // */
+        // var max_var(polynomial_ref_vector const & ps) {
+        //     if (ps.empty())
+        //         return null_var;
+        //     var max = max_var(ps.get(0)); 
+        //     SASSERT(max != null_var); // there are no constant polynomials in ps
+        //     unsigned sz = ps.size();
+        //     for (unsigned i = 1; i < sz; i++) {
+        //         var curr = m_pm.max_var(ps.get(i));
+        //         SASSERT(curr != null_var);
+        //         if (curr > max)
+        //             max = curr;
+        //     }
+        //     return max;
+        // }
 
-        polynomial::var max_var(literal l) {
-            atom * a  = m_atoms[l.var()];
-            if (a != nullptr)
-                return a->max_var();
-            else
-                return null_var;
-        }
+        // polynomial::var max_var(literal l) {
+        //     atom * a  = m_atoms[l.var()];
+        //     if (a != nullptr)
+        //         return a->max_var();
+        //     else
+        //         return null_var;
+        // }
 
-        /**
-           \brief Return the maximal variable in the given set of literals
-         */
-        var max_var(unsigned sz, literal const * ls) {
-            var max = null_var;
-            for (unsigned i = 0; i < sz; i++) {
-                literal l = ls[i];
-                atom * a  = m_atoms[l.var()];
-                if (a != nullptr) {
-                    var x = a->max_var();
-                    SASSERT(x != null_var);
-                    if (max == null_var || x > max) 
-                        max = x;
+        // /**
+        //    \brief Return the maximal variable in the given set of literals
+        //  */
+        // var max_var(unsigned sz, literal const * ls) {
+        //     var max = null_var;
+        //     for (unsigned i = 0; i < sz; i++) {
+        //         literal l = ls[i];
+        //         atom * a  = m_atoms[l.var()];
+        //         if (a != nullptr) {
+        //             var x = a->max_var();
+        //             SASSERT(x != null_var);
+        //             if (max == null_var || x > max) 
+        //                 max = x;
+        //         }
+        //     }
+        //     return max;
+        // }
+
+
+        
+        // wzh dynamic
+        // -----------------------
+        //
+        // Dynamic Ordering
+        //
+        // -----------------------
+        var max_stage_or_unassigned(polynomial_ref_vector & ps){
+            var_vector curr_vars = get_vars_ps(ps);
+            var max_stage = null_var;
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return v;
+                }
+                var curr = find_stage(v);
+                if(max_stage == null_var || curr > max_stage){
+                    max_stage = curr;
                 }
             }
-            return max;
+            return max_stage;
         }
+
+        var max_stage_or_unassigned_lts(unsigned num, literal const * ls) const {
+            var_vector curr_vars = get_vars_lts(num, ls);
+        }
+
+        var max_stage_or_unassigned_atom(atom const * a) const {
+
+        }
+
+        var_vector get_vars_lts(unsigned num, literal const * ls) const {
+            var_vector res;
+            for(unsigned i = 0; i < num; i++){
+                literal l = ls[i];
+                var_vector curr = get_vars_literal(l);
+            }
+            return res;
+        }
+
+        var_vector get_vars_literal(literal l) const {
+            return get_vars_bool(l.var());
+        }
+
+        var_vector get_vars_bool(bool_var b) const {
+            return get_vars_atom(m_atoms[b]);
+        }
+
+        var_vector get_vars_atom(atom const * b) const {
+            if(b == nullptr){
+                return var_vector(0);
+            }
+            return b->is_ineq_atom() ? get_vars_ineq(to_ineq_atom(b)) : get_vars_root(to_root_atom(b));
+        }
+
+        var_vector get_vars_ineq(ineq_atom const * a) const {
+            var_vector res;
+            for(unsigned i = 0; i < a->size(); i++){
+                poly * p = a->p(i);
+                var_vector curr;
+                m_pm.vars(p, curr);
+                for(var v: curr){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
+            }
+            return res;
+        }
+
+        var_vector get_vars_root(root_atom const * a) const {
+            var_vector root;
+            m_pm.vars(a->p(), root);
+            root.push_back(a->x());
+            return root;
+        }
+
+        var_vector get_vars_ps(polynomial_ref_vector & ps){
+            var_vector res;
+            for(unsigned i = 0; i < ps.size(); i++){
+                var_vector curr;
+                poly * p = ps.get(i);
+                m_pm.vars(p, curr);
+                for(var v: curr){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
+            }
+            return res;
+        }
+
+
+        var max_stage_lts(unsigned sz, literal const * cls) {
+            var x      = null_var;
+            for (unsigned i = 0; i < sz; i++) {
+                literal l = cls[i];
+                // if (is_arith_literal(l)) {
+                var y = max_stage_literal(l);
+                if (x == null_var || y > x)
+                    x = y;
+                // }
+            }
+            return x;
+        }
+
+        var max_stage_literal(literal l) const {
+            SASSERT(all_assigned_literal(l));
+            return max_stage_bool(l.var());
+        }
+
+        var max_stage_bool(bool_var b) const {
+            return max_stage_atom(m_atoms[b]);
+        }
+
+        var max_stage_atom(atom const * a) const {
+            if(a == nullptr){
+                return null_var;
+            }
+            return a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : max_stage_root(to_root_atom(a));
+        }
+
+        var max_stage_ineq(ineq_atom const * a) const {
+            var res = null_var;
+            for(unsigned i = 0; i < a->size(); i++){
+                var curr = max_stage_poly(a->p(i));
+                if(res == null_var || curr > res){
+                    res = curr;
+                }
+            }
+            return res;
+        }
+
+        var max_stage_poly(poly const * p) const {
+            var_vector curr;
+            m_pm.vars(p, curr);
+            var x = null_var;
+            for(var v: curr){
+                var curr_stage = find_stage(v);
+                if(x == null_var || curr_stage > x){
+                    x = curr_stage;
+                }
+            }
+            return x;
+        }
+
+        var max_stage_root(root_atom const * a) const {
+            var p_stage = max_stage_poly(a->p());
+            var x_stage = find_stage(a->x());
+            return p_stage > x_stage ? p_stage : x_stage;
+        }
+
+        var find_stage(var x) const {
+            for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
+                if(m_dynamic_vars[i] == x){
+                    return i;
+                }
+            }
+            UNREACHABLE();
+            return UINT_MAX;
+        }
+        // hzw dynamic
 
         /**
            \brief Move the polynomials in q in ps that do not contain x to qs.
@@ -561,7 +728,8 @@ namespace nlsat {
             unsigned j  = 0;
             for (unsigned i = 0; i < sz; i++) {
                 poly * q = ps.get(i);
-                if (max_var(q) != x) {
+                // if (max_var(q) != x) {
+                if(max_stage_poly(q) != x){
                     qs.push_back(q);
                 }
                 else {
@@ -969,6 +1137,7 @@ namespace nlsat {
             }
         }
 
+        // wzh dynamic
         /**
            \brief Return true if all polynomials in ps are univariate in x.
         */
@@ -976,13 +1145,23 @@ namespace nlsat {
             unsigned sz = ps.size();
             for (unsigned i = 0; i < sz; i++) {
                 poly * p = ps.get(i);
-                if (max_var(p) != x)
+                // if (max_var(p) != x)
+                //     return false;
+                // if (!m_pm.is_univariate(p))
+                //     return false;
+                if(!is_univ(p, x)){
                     return false;
-                if (!m_pm.is_univariate(p))
-                    return false;
+                }
             }
             return true;
         }
+
+        bool is_univ(poly * p, var x){
+            var_vector curr;
+            m_pm.vars(p, curr);
+            return curr.size() == 1 && curr[0] == x;
+        }
+        // hzw dynamic
         
         /**
            \brief Apply model-based projection operation defined in our paper.
@@ -1196,7 +1375,8 @@ namespace nlsat {
                     new_lit.neg();
                 TRACE("nlsat_simplify_core", tout << "simplified literal:\n"; display(tout, new_lit) << " " << m_solver.value(new_lit) << "\n";);
                 
-                if (max_var(new_lit) < max) {
+                // if (max_var(new_lit) < max) {
+                if (max_stage_literal(new_lit) < max) {
                     if (m_solver.value(new_lit) == l_true) {
                         new_lit = l;
                     }
@@ -1376,7 +1556,8 @@ namespace nlsat {
             if (num == 0)
                 return;
             collect_polys(num, ls, m_ps);
-            var max_x = max_var(m_ps);
+            // var max_x = max_var(m_ps);
+            var max_x = max_stage_or_unassigned(m_ps);
             TRACE("nlsat_explain", tout << "polynomials in the conflict:\n"; display(tout, m_ps); tout << "\n";);
             elim_vanishing(m_ps);
             TRACE("nlsat_explain", tout << "elim vanishing\n"; display(tout, m_ps); tout << "\n";);
@@ -1388,7 +1569,8 @@ namespace nlsat {
             if (m_simplify_cores) {
                 m_core2.reset();
                 m_core2.append(num, ls);
-                var max = max_var(num, ls);
+                // var max = max_var(num, ls);
+                var max = max_stage_or_unassigned(num, ls);
                 SASSERT(max != null_var);
                 TRACE("nlsat_explain", display(tout << "core before normalization\n", m_core2) << "\n";);
                 normalize(m_core2, max);
@@ -1418,7 +1600,8 @@ namespace nlsat {
                 literal l = core[i];
                 atom * a  = m_atoms[l.var()];
                 SASSERT(a != 0);
-                interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr);
+                // interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr);
+                interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr, max_stage_or_unassigned_atom(a));
                 r = ism.mk_union(inf, r);
                 if (ism.is_full(r)) {
                     // Done
@@ -1437,7 +1620,8 @@ namespace nlsat {
                 literal l = todo[i];
                 atom * a  = m_atoms[l.var()];
                 SASSERT(a != 0);
-                interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr);
+                // interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr);
+                interval_set_ref inf = m_evaluator.infeasible_intervals(a, l.sign(), nullptr, max_stage_or_unassigned_atom(a));
                 r = ism.mk_union(inf, r);
                 if (ism.is_full(r)) {
                     // literal l must be in the core
@@ -1485,9 +1669,16 @@ namespace nlsat {
             }
         }
       
-        void operator()(unsigned num, literal const * ls, scoped_literal_vector & result) {
+        void operator()(unsigned num, literal const * ls, var_vector const & dynamic, scoped_literal_vector & result) {
             SASSERT(check_already_added());
             SASSERT(num > 0);
+            // wzh dynamic
+            m_dynamic_vars.reset();
+            for(var v: dynamic){
+                m_dynamic_vars.push_back(v);
+                TRACE("wzh", tout << "[dynamic] dynamic vars: " << v << std::endl;);
+            }
+            // hzw dynamic
             TRACE("nlsat_explain", 
                   tout << "[explain] set of literals is infeasible in the current interpretation\n"; 
                   display(tout, num, ls) << "\n";
@@ -1866,8 +2057,12 @@ namespace nlsat {
         m_imp->m_signed_project = f;
     }
 
-    void explain::operator()(unsigned n, literal const * ls, scoped_literal_vector & result) {
-        (*m_imp)(n, ls, result);
+    // void explain::operator()(unsigned n, literal const * ls, scoped_literal_vector & result) {
+    //     (*m_imp)(n, ls, result);
+    // }
+
+    void explain::operator()(unsigned n, literal const * ls, var_vector const & dynamic, scoped_literal_vector & result) {
+        (*m_imp)(n, ls, dynamic, result);
     }
 
     void explain::project(var x, unsigned n, literal const * ls, scoped_literal_vector & result) {
