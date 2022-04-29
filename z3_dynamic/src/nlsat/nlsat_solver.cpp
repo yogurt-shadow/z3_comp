@@ -1939,7 +1939,7 @@ namespace nlsat {
                 heuristic_reorder();
                 reordered = true;
             }
-            sort_watched_clauses();
+            // sort_watched_clauses();
             lbool r = search_check();
             CTRACE("nlsat_model", r == l_true, tout << "model before restore order\n"; display_assignment(tout););
             if (reordered) {
@@ -2534,14 +2534,14 @@ namespace nlsat {
                     return false;
                 }
             }
-            if (m_xk != null_var) {
-                for (var x = 0; x < m_xk; x++) {
-                    if (!check_satisfied(m_watches[x])) {
-                        UNREACHABLE();
-                        return false;
-                    }
-                }
-            }
+            // if (m_xk != null_var) {
+            //     for (var x = 0; x < m_xk; x++) {
+            //         if (!check_satisfied(m_watches[x])) {
+            //             UNREACHABLE();
+            //             return false;
+            //         }
+            //     }
+            // }
             return true;
         }
         
