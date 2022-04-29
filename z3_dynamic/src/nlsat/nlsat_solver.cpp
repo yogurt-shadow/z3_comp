@@ -382,8 +382,43 @@ namespace nlsat {
 
         bool is_arith_literal(literal l) const { return is_arith_atom(l.var()); }
 
-        // wzh dynamic
-        // wzh max var
+        // wzh dynamic main
+        // max_var(b) == x
+        bool same_stage(bool_var b, var x) const {
+            return all_assigned_bool(b) && contains_bool(b, x);
+        }
+
+        bool contains_bool(bool_var b, var x) const {
+            if(!is_arith_atom(b)){
+                return false;
+            }
+            return contains_atom(m_atoms[b], x);
+        }
+
+        bool contains_atom(atom const * a, var x) const {
+            if(a == nullptr){
+                return false;
+            }
+            return a->is_ineq_atom() ? contains_ineq(to_ineq_atom(a), x) : contains_root(to_root_atom(a), x);
+        }
+
+        bool contains_ineq(ineq_atom const * a, var x) const {
+            for(unsigned i = 0; i < a->size(); i++){
+                var_vector curr;
+                m_pm.vars(a->p(i), curr);
+                if(curr.contains(x)){
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool contains_root(root_atom const * a, var x) const {
+            var_vector curr;
+            m_pm.vars(a->p(), curr);
+            return curr.contains(x) || a->x() == x;
+        }
+
         bool all_bool_clause(clause const & cls) const {
             for(unsigned i = 0; i < cls.size(); i++){
                 literal l = cls[i];
@@ -394,7 +429,25 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left(poly const * p, var x) const {
+        // at least one literal is only left
+        // other literal is all assigned
+        bool only_left_clause(clause const & cls, var x) const {
+            bool have_only = false;
+            for(unsigned i = 0; i < cls.size(); i++){
+                literal l = cls[i];
+                if(all_assigned_literal(l)){
+                    continue;
+                }
+                if(only_left_literal(l, x)){
+                    have_only = true;
+                    continue;;
+                }
+                return false;
+            }
+            return have_only;
+        }
+
+        bool only_left_poly(poly const * p, var x) const {
             var_vector curr_vars;
             m_pm.vars(p, curr_vars);
             if(!curr_vars.contains(x)){
@@ -411,7 +464,7 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left(bool_var b, var x) const {
+        bool only_left_bool(bool_var b, var x) const {
             if(!is_arith_atom(b)){
                 return false;
             }
@@ -469,7 +522,18 @@ namespace nlsat {
             return only_left_bool(l.var(), x);
         }
 
-        bool all_assigned(atom const * a) const {
+        bool all_assigned_literal(literal l) const {
+            if(!is_arith_literal(l)){
+                return true;
+            }
+            return all_assigned_bool(l.var());
+        }
+
+        bool all_assigned_bool(bool_var b) const {
+            return all_assigned_atom(m_atoms[b]);
+        }
+
+        bool all_assigned_atom(atom const * a) const {
             return a->is_ineq_atom() ? all_assigned_ineq(to_ineq_atom(a)) : all_assigned_root(to_root_atom(a));
         }
 
@@ -502,8 +566,22 @@ namespace nlsat {
             }
             return m_assignment.is_assigned(a->m_x);
         }
-        // hzw max var
-        // hzw dynamic
+
+        clause_vector find_max_var(var x){
+            clause_vector res;
+            for(clause * cls: m_clauses){
+                if(only_left_clause(*cls, x)){
+                    res.push_back(cls);
+                }
+            }
+            for(clause * cls: m_learned){
+                if(only_left_clause(*cls, x)){
+                    res.push_back(cls);
+                }
+            }
+            return res;
+        }
+        // hzw dynamic main
 
         /**
            \brief Return the maximum Boolean variable occurring in cls.
@@ -1302,7 +1380,7 @@ namespace nlsat {
             }
             // var max = a->max_var();
             // if (!m_assignment.is_assigned(max)) {
-            if(!all_assigned(a)){
+            if(!all_assigned_atom(a)){
                 TRACE("nlsat_verbose", display(tout << " maximal variable not assigned ", l) << "\n";);
                 return l_undef;
             }
@@ -1651,21 +1729,21 @@ namespace nlsat {
                     return l_true;
                 }
                 while (true) {
-                    TRACE("nlsat_verbose", tout << "processing variable "; 
-                          if (m_xk != null_var) {
-                              m_display_var(tout, m_xk); tout << " " << m_watches[m_xk].size();
-                          }
-                          else {
-                              tout << m_bwatches[m_bk].size() << " boolean b" << m_bk;
-                          }
-                          tout << "\n";);
+                    // TRACE("nlsat_verbose", tout << "processing variable "; 
+                    //       if (m_xk != null_var) {
+                    //           m_display_var(tout, m_xk); tout << " " << m_watches[m_xk].size();
+                    //       }
+                    //       else {
+                    //           tout << m_bwatches[m_bk].size() << " boolean b" << m_bk;
+                    //       }
+                    //       tout << "\n";);
                     checkpoint();
                     clause * conflict_clause;
                     if (m_xk == null_var)
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
-                        conflict_clause = process_clauses(m_watches[m_xk]);
+                        conflict_clause = process_clauses(clauses);
                     }
                     if (conflict_clause == nullptr)
                         break;
@@ -1918,13 +1996,14 @@ namespace nlsat {
             TRACE("nlsat_resolve", tout << "b_lvl: " << b_lvl << ", is_marked(b): " << is_marked(b) << ", m_num_marks: " << m_num_marks << "\n";);
             if (!is_marked(b)) {
                 mark(b);
-                if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
+                // if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
+                if(b_lvl = scope_lvl() && same_stage(b, m_xk)){
                     TRACE("nlsat_resolve", tout << "literal is in the same level and stage, increasing marks\n";);
                     m_num_marks++;
                 }
                 else {
-                    TRACE("nlsat_resolve", tout << "previous level or stage, adding literal to lemma\n";
-                          tout << "max_var(b): " << max_var(b) << ", m_xk: " << m_xk << ", lvl: " << b_lvl << ", scope_lvl: " << scope_lvl() << "\n";);
+                    // TRACE("nlsat_resolve", tout << "previous level or stage, adding literal to lemma\n";
+                    //       tout << "max_var(b): " << max_var(b) << ", m_xk: " << m_xk << ", lvl: " << b_lvl << ", scope_lvl: " << scope_lvl() << "\n";);
                     m_lemma.push_back(antecedent);
                 }
             }
