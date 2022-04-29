@@ -382,6 +382,14 @@ namespace nlsat {
 
         bool is_arith_literal(literal l) const { return is_arith_atom(l.var()); }
 
+        
+        // wzh dynamic
+        // -----------------------
+        //
+        // Dynamic Ordering
+        //
+        // -----------------------
+
         // wzh dynamic main
         var max_stage_lts(unsigned sz, literal const * cls) const {
             var x      = null_var;
@@ -659,6 +667,17 @@ namespace nlsat {
                 }
             }
             return res;
+        }
+
+        bool have_var_ge(poly const * p, var x){
+            var_vector curr;
+            m_pm.vars(p, curr);
+            for(var v: curr){
+                if(v >= x){
+                    return true;
+                }
+            }
+            return false;
         }
         // hzw dynamic main
 
@@ -2694,7 +2713,7 @@ namespace nlsat {
                   );
             SASSERT(num_vars() == sz);
             TRACE("nlsat_bool_assignment_bug", tout << "before reset watches\n"; display_bool_assignment(tout););
-            reset_watches();
+            // reset_watches();
             assignment new_assignment(m_am);
             for (var x = 0; x < num_vars(); x++) {
                 if (m_assignment.is_assigned(x)) 
@@ -2736,8 +2755,8 @@ namespace nlsat {
             TRACE("nlsat_bool_assignment_bug", tout << "before reinit cache\n"; display_bool_assignment(tout););
             reinit_cache();
             m_assignment.swap(new_assignment);
-            reattach_arith_clauses(m_clauses);
-            reattach_arith_clauses(m_learned);
+            // reattach_arith_clauses(m_clauses);
+            // reattach_arith_clauses(m_learned);
             TRACE("nlsat_reorder", tout << "solver after variable reorder\n"; display(tout); display_vars(tout););
         }
 
@@ -2832,12 +2851,12 @@ namespace nlsat {
             }
         }
 
-        void reset_watches() {
-            unsigned num = num_vars();
-            for (var x = 0; x < num; x++) {
-                m_watches[x].reset();
-            }
-        }
+        // void reset_watches() {
+        //     unsigned num = num_vars();
+        //     for (var x = 0; x < num; x++) {
+        //         m_watches[x].reset();
+        //     }
+        // }
 
         // void reattach_arith_clauses(clause_vector const & cs) {
         //     for (clause* cp : cs) {
@@ -2883,13 +2902,13 @@ namespace nlsat {
         //     TRACE("nlsat_reorder_clauses", tout << "after:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
         // }
 
-        void sort_watched_clauses() {
-            unsigned num = num_vars();
-            for (unsigned i = 0; i < num; i++) {
-                clause_vector & ws = m_watches[i];
-                sort_clauses_by_degree(ws.size(), ws.data());
-            }
-        }
+        // void sort_watched_clauses() {
+        //     unsigned num = num_vars();
+        //     for (unsigned i = 0; i < num; i++) {
+        //         clause_vector & ws = m_watches[i];
+        //         sort_clauses_by_degree(ws.size(), ws.data());
+        //     }
+        // }
 
         // -----------------------
         //
@@ -3197,9 +3216,15 @@ namespace nlsat {
             if (!is_unit_eq(c)) return false;
             ineq_atom & a = *to_ineq_atom(m_atoms[c[0].var()]);
             if (!is_single_poly(a, p0)) return false;
-            var mx = max_var(p0);
-            if (mx >= m_is_int.size()) return false;
-            for (var x = 0; x <= mx; ++x) {
+            // var mx = max_var(p0);
+            // if (mx >= m_is_int.size()) return false;
+            if(have_var_ge(p0, num_vars())){
+                return false;
+            }
+            var_vector curr_vars;
+            m_pm.vars(p0, curr_vars);
+            // for (var x = 0; x <= mx; ++x) {
+            for(var x: curr_vars){
                 if (m_is_int[x]) continue;
                 if (1 == m_pm.degree(p0, x)) {                    
                     p = m_pm.coeff(p0, x, 1, q);
