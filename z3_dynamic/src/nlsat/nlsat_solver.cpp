@@ -383,9 +383,88 @@ namespace nlsat {
         bool is_arith_literal(literal l) const { return is_arith_atom(l.var()); }
 
         // wzh dynamic main
+        var max_stage_lts(unsigned sz, literal const * cls) const {
+            var x      = null_var;
+            for (unsigned i = 0; i < sz; i++) {
+                literal l = cls[i];
+                if (is_arith_literal(l)) {
+                    var y = max_stage_literal(l);
+                    if (x == null_var || y > x)
+                        x = y;
+                }
+            }
+            return x;
+        }
+
+        var max_stage_literal(literal l) const {
+            SASSERT(all_assigned_literal(l));
+            return max_stage_bool(l.var());
+        }
+
+        var max_stage_bool(bool_var b) const {
+            return max_stage_atom(m_atoms[b]);
+        }
+
+        var max_stage_atom(atom const * a) const {
+            if(a == nullptr){
+                return null_var;
+            }
+            return a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : max_stage_root(to_root_atom(a));
+        }
+
+        var max_stage_ineq(ineq_atom const * a) const {
+            var res = null_var;
+            for(unsigned i = 0; i < a->size(); i++){
+                var curr = max_stage_poly(a->p(i));
+                if(res == null_var || curr > res){
+                    res = curr;
+                }
+            }
+            return res;
+        }
+
+        var max_stage_poly(poly const * p) const {
+            var_vector curr;
+            m_pm.vars(p, curr);
+            var x = null_var;
+            for(var v: curr){
+                var curr_stage = find_stage(v);
+                if(x == null_var || curr_stage > x){
+                    x = curr_stage;
+                }
+            }
+            return x;
+        }
+
+        var max_stage_root(root_atom const * a) const {
+            var p_stage = max_stage_poly(a->p());
+            var x_stage = find_stage(a->x());
+            return p_stage > x_stage ? p_stage : x_stage;
+        }
+
+        var find_stage(var x) const {
+            for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
+                if(m_dynamic_vars[i] == x){
+                    return i;
+                }
+            }
+            UNREACHABLE();
+            return UINT_MAX;
+        }
+
+
+        bool same_stage_literal(literal l, var x) const {
+            return same_stage_bool(l.var(), x);
+        }
+
         // max_var(b) == x
-        bool same_stage(bool_var b, var x) const {
+        bool same_stage_bool(bool_var b, var x) const {
             return all_assigned_bool(b) && contains_bool(b, x);
+        }
+
+        // max_var(a) == x
+        bool same_stage_atom(atom const * a, var x) const {
+            return all_assigned_atom(a) && contains_atom(a, x);
         }
 
         bool contains_bool(bool_var b, var x) const {
@@ -1997,7 +2076,7 @@ namespace nlsat {
             if (!is_marked(b)) {
                 mark(b);
                 // if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
-                if(b_lvl = scope_lvl() && same_stage(b, m_xk)){
+                if(b_lvl = scope_lvl() && same_stage_bool(b, m_xk)){
                     TRACE("nlsat_resolve", tout << "literal is in the same level and stage, increasing marks\n";);
                     m_num_marks++;
                 }
@@ -2085,8 +2164,11 @@ namespace nlsat {
         */
         bool only_literals_from_previous_stages(unsigned num, literal const * ls) const {
             for (unsigned i = 0; i < num; i++) {
-                if (max_var(ls[i]) == m_xk)
+                // if (max_var(ls[i]) == m_xk)
+                //     return false;
+                if(same_stage_literal(ls[i], m_xk)){
                     return false;
+                }
             }
             return true;
         }
@@ -2132,7 +2214,8 @@ namespace nlsat {
                 bool_var b = l.var();
                 SASSERT(is_marked(b));
                 SASSERT(value(lemma[i]) == l_false);
-                if (assigned_value(l) == l_false && m_levels[b] == lvl && max_var(b) == m_xk) {
+                // if (assigned_value(l) == l_false && m_levels[b] == lvl && max_var(b) == m_xk) {
+                if (assigned_value(l) == l_false && m_levels[b] == lvl && same_stage_bool(b, m_xk)) {
                     m_num_marks++;
                     continue;
                 }
@@ -2165,7 +2248,8 @@ namespace nlsat {
             bool found_lvl   = false;
             for (unsigned i = 0; i < sz - 1; i++) {
                 literal l = lemma[i];
-                if (max_var(l) == m_xk) {
+                // if (max_var(l) == m_xk) {
+                if(same_stage_literal(l, m_xk)){
                     bool_var b = l.var();
                     if (!found_lvl) {
                         found_lvl = true;
@@ -2314,7 +2398,8 @@ namespace nlsat {
                 // Case 1)
                 // We just have to find the maximal variable in m_lemma, and return to that stage
                 // Remark: the lemma may contain only boolean literals, in this case new_max_var == null_var;
-                var new_max_var = max_var(sz, m_lemma.data());
+                // var new_max_var = max_var(sz, m_lemma.data());
+                var new_max_var = max_stage_lts(sz, m_lemma.data());
                 TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_var << ", curr: " << m_xk << "\n";);
                 undo_until_stage(new_max_var);
                 SASSERT(m_xk == new_max_var);
