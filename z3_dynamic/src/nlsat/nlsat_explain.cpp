@@ -565,9 +565,9 @@ namespace nlsat {
         // Dynamic Ordering
         //
         // -----------------------
-        var max_stage_or_unassigned(polynomial_ref_vector & ps){
+        var max_stage_or_unassigned_ps(polynomial_ref_vector & ps){
             var_vector curr_vars = get_vars_ps(ps);
-            var max_stage = null_var;
+            var max_stage = null_var, res_x = null_var;
             for(var v: curr_vars){
                 if(!m_assignment.is_assigned(v)){
                     return v;
@@ -575,17 +575,43 @@ namespace nlsat {
                 var curr = find_stage(v);
                 if(max_stage == null_var || curr > max_stage){
                     max_stage = curr;
+                    res_x = v;
                 }
             }
-            return max_stage;
+            return res_x;
         }
 
         var max_stage_or_unassigned_lts(unsigned num, literal const * ls) const {
             var_vector curr_vars = get_vars_lts(num, ls);
+            var max_stage = null_var, res_x = null_var;
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return v;
+                }
+                var curr_stage = find_stage(v);
+                if(max_stage == null_var || curr_stage > max_stage){
+                    max_stage = curr_stage;
+                    res_x = v;
+                }
+            }
+            return res_x;
         }
 
         var max_stage_or_unassigned_atom(atom const * a) const {
-
+            var_vector res = get_vars_atom(a);
+            var max_stage = null_var;
+            var res_x = null_var;
+            for(var v: res){
+                if(!m_assignment.is_assigned(v)){
+                    return v;
+                }
+                var curr_stage = find_stage(v);
+                if(max_stage == null_var || curr_stage > max_stage){
+                    max_stage = curr_stage;
+                    res_x = v;
+                }
+            }
+            return res_x;
         }
 
         var_vector get_vars_lts(unsigned num, literal const * ls) const {
@@ -593,6 +619,11 @@ namespace nlsat {
             for(unsigned i = 0; i < num; i++){
                 literal l = ls[i];
                 var_vector curr = get_vars_literal(l);
+                for(var v: curr){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
             }
             return res;
         }
@@ -1557,7 +1588,7 @@ namespace nlsat {
                 return;
             collect_polys(num, ls, m_ps);
             // var max_x = max_var(m_ps);
-            var max_x = max_stage_or_unassigned(m_ps);
+            var max_x = max_stage_or_unassigned_ps(m_ps);
             TRACE("nlsat_explain", tout << "polynomials in the conflict:\n"; display(tout, m_ps); tout << "\n";);
             elim_vanishing(m_ps);
             TRACE("nlsat_explain", tout << "elim vanishing\n"; display(tout, m_ps); tout << "\n";);
@@ -1570,7 +1601,7 @@ namespace nlsat {
                 m_core2.reset();
                 m_core2.append(num, ls);
                 // var max = max_var(num, ls);
-                var max = max_stage_or_unassigned(num, ls);
+                var max = max_stage_or_unassigned_lts(num, ls);
                 SASSERT(max != null_var);
                 TRACE("nlsat_explain", display(tout << "core before normalization\n", m_core2) << "\n";);
                 normalize(m_core2, max);
@@ -1709,7 +1740,8 @@ namespace nlsat {
                 });
             split_literals(x, num, ls, lits);
             collect_polys(lits.size(), lits.data(), m_ps);
-            var mx_var = max_var(m_ps);
+            // var mx_var = max_var(m_ps);
+            var mx_var = max_stage_or_unassigned_ps(m_ps);
             if (!m_ps.empty()) {                
                 svector<var> renaming;
                 if (x != mx_var) {
