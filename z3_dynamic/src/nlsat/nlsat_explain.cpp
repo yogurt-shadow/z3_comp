@@ -1230,8 +1230,22 @@ namespace nlsat {
                 m_todo.insert(p);
             }
             // var x = m_todo.remove_max_polys(ps);
+            TRACE("wzh", tout << "[dynamic] show polynomials before var:\n";
+                for(auto ele: ps){
+                    m_pm.display(tout << " ", ele);
+                }
+                tout << std::endl;
+            );
             var x = max_stage_or_unassigned_ps(ps);
+            TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
             m_todo.remove_var_polys(ps, x);
+            TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
+                for(auto ele: ps){
+                    m_pm.display(tout << " ", ele);
+                }
+                tout << std::endl;
+            );
+
             // Remark: after vanishing coefficients are eliminated, ps may not contain max_x anymore
             if (x < max_x)
                 add_cell_lits(ps, x);
@@ -1249,7 +1263,20 @@ namespace nlsat {
                     break;
                 // x = m_todo.remove_max_polys(ps);
                 x = max_stage_or_unassigned_ps(ps);
+                TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
+                TRACE("wzh", tout << "[dynamic] show polynomials before var:\n";
+                    for(auto ele: ps){
+                        m_pm.display(tout << " ", ele);
+                    }
+                    tout << std::endl;
+                );
                 m_todo.remove_var_polys(ps, x);
+                TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
+                    for(auto ele: ps){
+                        m_pm.display(tout << " ", ele);
+                    }
+                    tout << std::endl;
+                );
                 add_cell_lits(ps, x);
             }
         }

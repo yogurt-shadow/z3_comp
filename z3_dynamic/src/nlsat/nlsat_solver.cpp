@@ -441,18 +441,18 @@ namespace nlsat {
             return get_vars_bool(l.var());
         }
 
-        var_vector get_vars_bool(bool_var b){
+        var_vector get_vars_bool(bool_var b) const {
             return get_vars_atom(m_atoms[b]);
         }
 
-        var_vector get_vars_atom(atom const * a){
+        var_vector get_vars_atom(atom const * a) const {
             if(a == nullptr){
                 return var_vector(0);
             }
             return a->is_ineq_atom() ? get_vars_ineq(to_ineq_atom(a)) : get_vars_root(to_root_atom(a));
         }
 
-        var_vector get_vars_ineq(ineq_atom const * a){
+        var_vector get_vars_ineq(ineq_atom const * a) const {
             var_vector res;
             for(unsigned i = 0; i < a->size(); i++){
                 var_vector curr;
@@ -466,7 +466,7 @@ namespace nlsat {
             return res;
         }
 
-        var_vector get_vars_root(root_atom const * a){
+        var_vector get_vars_root(root_atom const * a) const {
             var_vector res;
             m_pm.vars(a->p(), res);
             res.push_back(a->x());
@@ -557,12 +557,40 @@ namespace nlsat {
 
         // max_var(b) == x
         bool same_stage_bool(bool_var b, var x) const {
-            return all_assigned_bool(b) && contains_bool(b, x);
+            // return all_assigned_bool(b) && contains_bool(b, x);
+            var_vector curr_vars = get_vars_bool(b);
+            var stage = find_stage(x);
+            bool contain = false;
+            for(var v: curr_vars){
+                if(v == x){
+                    contain = true;
+                }
+                else {
+                    if(find_stage(v) > stage){
+                        return false;
+                    }
+                }
+            }
+            return contain;
         }
 
         // max_var(a) == x
         bool same_stage_atom(atom const * a, var x) const {
-            return all_assigned_atom(a) && contains_atom(a, x);
+            // return all_assigned_atom(a) && contains_atom(a, x);
+            var_vector curr_vars = get_vars_atom(a);
+            var stage = find_stage(x);
+            bool contain = false;
+            for(var v: curr_vars){
+                if(v == x){
+                    contain = true;
+                }
+                else {
+                    if(find_stage(v) > stage){
+                        return false;
+                    }
+                }
+            }
+            return contain;
         }
 
         bool contains_bool(bool_var b, var x) const {
@@ -1382,6 +1410,7 @@ namespace nlsat {
             // }
 
             // wzh dynamic
+            TRACE("wzh", tout << "[dynamic] undo stage and pop dynamic var: " << m_dynamic_vars.back() << std::endl;);
             m_dynamic_vars.pop_back();
             if(m_dynamic_vars.empty()){
                 m_xk = null_var;
@@ -1562,7 +1591,8 @@ namespace nlsat {
             // var max = a->max_var();
             // if (!m_assignment.is_assigned(max)) {
             if(!all_assigned_atom(a)){
-                TRACE("nlsat_verbose", display(tout << " maximal variable not assigned ", l) << "\n";);
+                TRACE("wzh", display(tout << "[dynamic] not all assigned ", l) << "\n";);
+                TRACE("wzh", display_assignment(tout););
                 return l_undef;
             }
             val = to_lbool(m_evaluator.eval(a, l.sign()));
@@ -1847,7 +1877,6 @@ namespace nlsat {
         void select_next_arith_var(){
             if(m_xk == null_var){
                 m_xk = 0;
-                m_dynamic_vars.push_back(m_xk);
             }
             else {
                 m_xk++;
@@ -1880,6 +1909,13 @@ namespace nlsat {
 
         bool is_satisfied() {
             // if (m_bk == null_bool_var && m_xk >= num_vars()) {
+            TRACE("wzh", tout << "[dynamic] num of vars is: " << num_vars() << std::endl;);
+            TRACE("wzh", tout << "[dynamic] dynamic vars is: ";
+                for(var v: m_dynamic_vars){
+                    tout << v << " ";
+                }
+                tout << std::endl;
+            );
             if(m_bk == null_bool_var && m_dynamic_vars.size() > num_vars()){
                 TRACE("nlsat", tout << "found model\n"; display_assignment(tout););
                 fix_patch();
