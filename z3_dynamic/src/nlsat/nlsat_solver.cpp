@@ -132,6 +132,7 @@ namespace nlsat {
         //
         // -----------------------
         var_vector m_dynamic_vars;
+        var_vector m_project_order;
         // hzw dynamic
 
 
@@ -391,6 +392,64 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
+        void fix_projection_order(unsigned num, literal const * ls){
+            m_project_order.reset();
+            var_vector curr_vars = get_vars_lts(num, ls);
+            // m variables project m-1 times
+            while(m_project_order.size() < curr_vars.size() - 1){
+                
+            }
+        }
+
+        var_vector get_vars_lts(unsigned num, literal const * ls){
+            var_vector res;
+            for(unsigned i = 0; i < num; i++){
+                literal l = ls[i];
+                for(var v: get_vars_literal(l)){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
+            }
+            return res;
+        }
+
+        var_vector get_vars_literal(literal l){
+            return get_vars_bool(l.var());
+        }
+
+        var_vector get_vars_bool(bool_var b){
+            return get_vars_atom(m_atoms[b]);
+        }
+
+        var_vector get_vars_atom(atom const * a){
+            if(a == nullptr){
+                return var_vector(0);
+            }
+            return a->is_ineq_atom() ? get_vars_ineq(to_ineq_atom(a)) : get_vars_root(to_root_atom(a));
+        }
+
+        var_vector get_vars_ineq(ineq_atom const * a){
+            var_vector res;
+            for(unsigned i = 0; i < a->size(); i++){
+                var_vector curr;
+                m_pm.vars(a->p(i), curr);
+                for(var v: curr){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
+            }
+            return res;
+        }
+
+        var_vector get_vars_root(root_atom const * a){
+            var_vector res;
+            m_pm.vars(a->p(), res);
+            res.push_back(a->x());
+            return res;
+        }
+
         bool is_root_reverse(atom * a) const {
             if(a == nullptr || !a->is_root_atom()){
                 return false;
@@ -464,7 +523,7 @@ namespace nlsat {
                     return i;
                 }
             }
-            UNREACHABLE();
+            // UNREACHABLE();
             return UINT_MAX;
         }
 
@@ -2151,7 +2210,11 @@ namespace nlsat {
                   display_mathematica_lemma(tout, core.size(), core.data(), true););
 
             m_lazy_clause.reset();
-            m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause);
+            // m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause);
+            // wzh dynamic
+            fix_projection_order(jst.num_lits(), jst.lits());
+            m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause, m_project_order);
+            // hzw dynamic
             for (unsigned i = 0; i < sz; i++)
                 m_lazy_clause.push_back(~jst.lit(i));
             
