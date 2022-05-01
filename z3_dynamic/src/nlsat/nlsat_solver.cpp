@@ -391,6 +391,14 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
+        bool is_root_reverse(atom * a) const {
+            if(a == nullptr || !a->is_root_atom()){
+                return false;
+            }
+            root_atom * _a = to_root_atom(a);
+            return m_xk != _a->x();
+        }
+
         var max_stage_lts(unsigned sz, literal const * cls) const {
             var x      = null_var;
             for (unsigned i = 0; i < sz; i++) {
@@ -1634,6 +1642,10 @@ namespace nlsat {
                 atom * a   = m_atoms[b];
                 SASSERT(a != nullptr);
                 interval_set_ref curr_set(m_ism);
+                // we disable this root atom
+                if(is_root_reverse(a)){
+                    continue;
+                }
                 // curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls);
                 curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls, m_xk);
                 TRACE("nlsat_inf_set", tout << "infeasible set for literal: "; display(tout, l); tout << "\n"; m_ism.display(tout, curr_set); tout << "\n";
@@ -1749,6 +1761,7 @@ namespace nlsat {
         }
 
         // wzh dynamic
+        // arith var heuristic
         void select_next_arith_var(){
             if(m_xk == null_var){
                 m_xk = 0;
@@ -1760,6 +1773,7 @@ namespace nlsat {
                     m_xk = null_var;
                 }
             }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << std::endl;);
             m_dynamic_vars.push_back(m_xk);
         }
         // hzw dynamic

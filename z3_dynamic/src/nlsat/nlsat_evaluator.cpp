@@ -399,8 +399,41 @@ namespace nlsat {
             return neg ? !r : r;
         }
 
+        // wzh dynamic
+        bool all_assigned_ineq(ineq_atom const * a) const {
+            var_vector curr_vars;
+            for(unsigned i = 0; i < a->size(); i++){
+                var_vector curr;
+                m_pm.vars(a->p(i), curr);
+                for(var v: curr){
+                    if(!curr_vars.contains(v)){
+                        curr_vars.push_back(v);
+                    }
+                }
+            }
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool all_assigned_root(root_atom const * a) const {
+            var_vector curr_vars;
+            m_pm.vars(a->p(), curr_vars);
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return false;
+                }
+            }
+            return m_assignment.is_assigned(a->x());
+        }
+        // hzw dynamic
+
         bool eval_ineq(ineq_atom * a, bool neg) {
-            SASSERT(m_assignment.is_assigned(a->max_var()));
+            // SASSERT(m_assignment.is_assigned(a->max_var()));
+            SASSERT(all_assigned_ineq(a));
             // all variables of a were already assigned... 
             atom::kind k = a->get_kind();
             unsigned sz  = a->size();
@@ -417,7 +450,8 @@ namespace nlsat {
         }
 
         bool eval_root(root_atom * a, bool neg) {
-            SASSERT(m_assignment.is_assigned(a->max_var()));
+            // SASSERT(m_assignment.is_assigned(a->max_var()));
+            SASSERT(all_assigned_root(a));
             // all variables of a were already assigned... 
             atom::kind k = a->get_kind();
             scoped_anum_vector & roots = m_tmp_values;
@@ -593,6 +627,11 @@ namespace nlsat {
         }
 
         interval_set_ref infeasible_intervals_root(root_atom * a, bool neg, clause const* cls, var x) {
+            // wzh dynamic
+            interval_set_ref result(m_ism);
+            // we disable this constraint and return an empty interval set
+            SASSERT(x == a->x());
+            // hzw dynamic
             atom::kind k = a->get_kind();
             unsigned i = a->i();
             SASSERT(i > 0);
@@ -604,7 +643,6 @@ namespace nlsat {
             // Note: I added undef_var_assignment in the following statement, to allow us to obtain the infeasible interval sets
             // even when the maximal variable is assigned. I need this feature to minimize conflict cores.
             m_am.isolate_roots(polynomial_ref(a->p(), m_pm), undef_var_assignment(m_assignment, x), roots);
-            interval_set_ref result(m_ism);
 
             if (i > roots.size()) {
                 // p does have sufficient roots
