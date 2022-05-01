@@ -642,7 +642,7 @@ namespace nlsat {
         }
 
         bool only_left_atom(atom const * a, var x) const {
-            return a->is_ineq_atom() ? only_left_ineq(to_ineq_atom(a), x) : only_left_root(to_root_atom(a), x);
+            return a->is_ineq_atom() ? only_left_ineq(to_ineq_atom(a), x) : only_left_and_ordered_root(to_root_atom(a), x);
         }
 
         bool only_left_ineq(ineq_atom const * a, var x) const {
@@ -670,8 +670,8 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left_root(root_atom const * a, var x) const {
-            if(a->m_x != x){
+        bool only_left_and_ordered_root(root_atom const * a, var x) const {
+            if(a->x() != x){
                 return false;
             }
             var_vector curr_vars;
