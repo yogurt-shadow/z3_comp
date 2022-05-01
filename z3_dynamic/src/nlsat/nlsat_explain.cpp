@@ -120,6 +120,13 @@ namespace nlsat {
             }
 
             // wzh dynamic
+            void collect_ps(polynomial_ref_vector & res) const {
+                res.reset();
+                for(unsigned i = 0; i < m_set.size(); i++){
+                    res.push_back(m_set.get(i));
+                }
+            }
+
             void remove_var_polys(polynomial_ref_vector & max_polys, var x){
                 max_polys.reset();
                 pmanager & pm = m_set.m();
@@ -1236,7 +1243,9 @@ namespace nlsat {
                 }
                 tout << std::endl;
             );
-            var x = max_stage_or_unassigned_ps(ps);
+            polynomial_ref_vector todo_ps(m_pm);
+            m_todo.collect_ps(todo_ps);
+            var x = max_stage_or_unassigned_ps(todo_ps);
             TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
             m_todo.remove_var_polys(ps, x);
             TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
@@ -1262,14 +1271,16 @@ namespace nlsat {
                 if (m_todo.empty())
                     break;
                 // x = m_todo.remove_max_polys(ps);
-                x = max_stage_or_unassigned_ps(ps);
-                TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
                 TRACE("wzh", tout << "[dynamic] show polynomials before var:\n";
                     for(auto ele: ps){
                         m_pm.display(tout << " ", ele);
                     }
                     tout << std::endl;
                 );
+                polynomial_ref_vector todo_ps(m_pm);
+                m_todo.collect_ps(todo_ps);
+                var x = max_stage_or_unassigned_ps(todo_ps);
+                TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
                 m_todo.remove_var_polys(ps, x);
                 TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
                     for(auto ele: ps){
