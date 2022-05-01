@@ -118,6 +118,31 @@ namespace nlsat {
                 m_set.shrink(j);
                 return x;
             }
+
+            // wzh dynamic
+            void remove_var_polys(polynomial_ref_vector & max_polys, var x){
+                max_polys.reset();
+                pmanager & pm = m_set.m();
+                unsigned sz = m_set.size();
+                unsigned j  = 0;
+                for (unsigned i = 0; i < sz; i++) {
+                    poly * p = m_set.get(i);
+                    // var y = pm.max_var(p);
+                    var_vector curr_vars;
+                    pm.vars(p, curr_vars);
+                    // if (y == x) {
+                    if(curr_vars.contains(x)) {
+                        max_polys.push_back(p);
+                        m_in_set[pm.id(p)] = false;
+                    }
+                    else {
+                        m_set.set(j, p);
+                        j++;
+                    }
+                }
+                m_set.shrink(j);
+            }
+            // hzw dynamic
         };
         
         // temporary field for store todo set of polynomials
@@ -1204,7 +1229,9 @@ namespace nlsat {
             for (poly* p : ps) {
                 m_todo.insert(p);
             }
-            var x = m_todo.remove_max_polys(ps);
+            // var x = m_todo.remove_max_polys(ps);
+            var x = max_stage_or_unassigned_ps(ps);
+            m_todo.remove_var_polys(ps, x);
             // Remark: after vanishing coefficients are eliminated, ps may not contain max_x anymore
             if (x < max_x)
                 add_cell_lits(ps, x);
@@ -1220,7 +1247,9 @@ namespace nlsat {
                 psc_resultant(ps, x);
                 if (m_todo.empty())
                     break;
-                x = m_todo.remove_max_polys(ps);
+                // x = m_todo.remove_max_polys(ps);
+                x = max_stage_or_unassigned_ps(ps);
+                m_todo.remove_var_polys(ps, x);
                 add_cell_lits(ps, x);
             }
         }

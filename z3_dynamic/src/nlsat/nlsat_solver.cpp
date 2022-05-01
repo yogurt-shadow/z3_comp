@@ -132,7 +132,7 @@ namespace nlsat {
         //
         // -----------------------
         var_vector m_dynamic_vars;
-        var_vector m_project_order;
+        // var_vector m_project_order;
         // hzw dynamic
 
 
@@ -392,14 +392,37 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
-        void fix_projection_order(unsigned num, literal const * ls){
-            m_project_order.reset();
-            var_vector curr_vars = get_vars_lts(num, ls);
-            // m variables project m-1 times
-            while(m_project_order.size() < curr_vars.size() - 1){
-                
+        struct stage_info {
+            var m_var;
+            var m_stage;
+
+            stage_info(var x, var stage)
+            : m_var(x),
+            m_stage(stage)
+            {}
+
+            // used for projection
+            // large stage first
+            bool operator<(stage_info const & other){
+                return this->m_stage > other.m_stage;
             }
-        }
+        };
+
+
+        // void fix_projection_order(unsigned num, literal const * ls){
+        //     m_project_order.reset();
+        //     var_vector curr_vars = get_vars_lts(num, ls);
+        //     // m variables project m-1 times
+        //     vector<stage_info> curr_stages;
+        //     for(var v: curr_vars){
+        //         curr_stages.push_back(stage_info(v, find_stage(v)));
+        //     }
+        //     std::sort(curr_stages.begin(), curr_stages.end());
+        //     // we only need first size-1 variables
+        //     for(unsigned i = 0; i < curr_stages.size() - 1; i++){
+        //         m_project_order.push_back(curr_stages[i].m_var);
+        //     }
+        // }
 
         var_vector get_vars_lts(unsigned num, literal const * ls){
             var_vector res;
@@ -2210,10 +2233,9 @@ namespace nlsat {
                   display_mathematica_lemma(tout, core.size(), core.data(), true););
 
             m_lazy_clause.reset();
-            // m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause);
             // wzh dynamic
-            fix_projection_order(jst.num_lits(), jst.lits());
-            m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause, m_project_order);
+            // fix_projection_order(jst.num_lits(), jst.lits());
+            m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause);
             // hzw dynamic
             for (unsigned i = 0; i < sz; i++)
                 m_lazy_clause.push_back(~jst.lit(i));
