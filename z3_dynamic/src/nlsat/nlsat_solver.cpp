@@ -1900,7 +1900,19 @@ namespace nlsat {
             else {
                 m_xk = random_select();
             }
-            // end ranom
+            // end random
+
+            // reverse select
+            // if(m_dynamic_vars.size() >= num_vars()){
+            //     m_xk = null_var;
+            // }
+            // else if(m_xk == null_var) {
+            //     m_xk = num_vars() - 1;
+            // }
+            // else{
+            //     m_xk --;
+            // }
+            // end reverse
             TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << std::endl;);
             m_dynamic_vars.push_back(m_xk);
         }
