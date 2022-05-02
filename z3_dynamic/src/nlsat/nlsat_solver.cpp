@@ -1875,17 +1875,44 @@ namespace nlsat {
         // wzh dynamic
         // arith var heuristic
         void select_next_arith_var(){
-            if(m_xk == null_var){
-                m_xk = 0;
+            // origin increasing arith order
+            // if(m_xk == null_var){
+            //     m_xk = 0;
+            // }
+            // else {
+            //     m_xk++;
+            //     if(m_dynamic_vars.size() >= num_vars()){
+            //         m_xk = null_var;
+            //     }
+            // }
+            // end origin
+
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
             }
             else {
-                m_xk++;
-                if(m_dynamic_vars.size() >= num_vars()){
-                    m_xk = null_var;
-                }
+                m_xk = random_select();
             }
             TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << std::endl;);
             m_dynamic_vars.push_back(m_xk);
+        }
+
+        // randomly select next var
+        var random_select(){
+            var res = null_var;
+            random_gen r(++m_random_seed);
+            unsigned num = 1;
+            for(unsigned i = 0; i < num_vars(); i++){
+                if(m_dynamic_vars.contains(i)){
+                    continue;
+                }
+                int k = r() % num;
+                if(k == 0){
+                    res = i;
+                }
+                num ++;
+            }
+            return res;
         }
         // hzw dynamic
 
