@@ -469,7 +469,9 @@ namespace nlsat {
         var_vector get_vars_root(root_atom const * a) const {
             var_vector res;
             m_pm.vars(a->p(), res);
-            res.push_back(a->x());
+            if(!res.contains(a->x())){
+                res.push_back(a->x());
+            }
             return res;
         }
 
@@ -1482,7 +1484,11 @@ namespace nlsat {
 
         // Keep undoing until stage is new_xk
         void undo_until_stage(var new_xk) {
-            undo_until(stage_pred(m_xk, new_xk));
+            // wzh dynamic
+            var stage_var = new_xk == null_var ? null_var : m_dynamic_vars[new_xk];
+            undo_until(stage_pred(m_xk, stage_var));
+            // hzw dynamic
+            // undo_until(stage_pred(m_xk, new_xk));
         }
 
         struct level_pred {
@@ -1887,12 +1893,14 @@ namespace nlsat {
             // }
             // end origin
 
+            // random select
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
             else {
                 m_xk = random_select();
             }
+            // end ranom
             TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << std::endl;);
             m_dynamic_vars.push_back(m_xk);
         }
@@ -2580,7 +2588,7 @@ namespace nlsat {
                 // Remark: the lemma may contain only boolean literals, in this case new_max_var == null_var;
                 // var new_max_var = max_var(sz, m_lemma.data());
                 var new_max_var = max_stage_lts(sz, m_lemma.data());
-                TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_var << ", curr: " << m_xk << "\n";);
+                TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_var << ", curr: " << m_dynamic_vars.size() - 1 << "\n";);
                 undo_until_stage(new_max_var);
                 SASSERT(m_xk == new_max_var);
                 new_cls = mk_clause(sz, m_lemma.data(), true, m_lemma_assumptions.get());
