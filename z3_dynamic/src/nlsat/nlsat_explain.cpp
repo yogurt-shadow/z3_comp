@@ -1239,21 +1239,29 @@ namespace nlsat {
             // var x = m_todo.remove_max_polys(ps);
             TRACE("wzh", tout << "[dynamic] show polynomials before var:\n";
                 for(auto ele: ps){
-                    m_pm.display(tout << " ", ele);
+                    m_pm.display(tout << std::endl, ele);
                 }
                 tout << std::endl;
             );
+            // wzh dynamic
             polynomial_ref_vector todo_ps(m_pm);
             m_todo.collect_ps(todo_ps);
+            TRACE("wzh", tout << "[dynamic] show todo polynomials:\n";
+                for(auto ele: todo_ps){
+                    m_pm.display(tout << std::endl, ele);
+                }
+                tout << std::endl;
+            );
             var x = max_stage_or_unassigned_ps(todo_ps);
             TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
             m_todo.remove_var_polys(ps, x);
             TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
                 for(auto ele: ps){
-                    m_pm.display(tout << " ", ele);
+                    m_pm.display(tout << std::endl, ele);
                 }
                 tout << std::endl;
             );
+            // hzw dynamic
 
             // Remark: after vanishing coefficients are eliminated, ps may not contain max_x anymore
             if (x < max_x)
@@ -1273,21 +1281,30 @@ namespace nlsat {
                 // x = m_todo.remove_max_polys(ps);
                 TRACE("wzh", tout << "[dynamic] show polynomials before var:\n";
                     for(auto ele: ps){
-                        m_pm.display(tout << " ", ele);
+                        m_pm.display(tout << std::endl, ele);
                     }
                     tout << std::endl;
                 );
+                // wzh dynamic
                 polynomial_ref_vector todo_ps(m_pm);
                 m_todo.collect_ps(todo_ps);
-                var x = max_stage_or_unassigned_ps(todo_ps);
+                TRACE("wzh", tout << "[dynamic] show todo polynomials:\n";
+                    for(auto ele: todo_ps){
+                        m_pm.display(tout << std::endl, ele);
+                    }
+                    tout << std::endl;
+                );
+                x = max_stage_or_unassigned_ps(todo_ps);
                 TRACE("wzh", tout << "[dynamic] next projection var: " << x << std::endl;);
                 m_todo.remove_var_polys(ps, x);
                 TRACE("wzh", tout << "[dynamic] show polynomials after remove:\n";
                     for(auto ele: ps){
-                        m_pm.display(tout << " ", ele);
+                        m_pm.display(tout << std::endl, ele);
                     }
                     tout << std::endl;
                 );
+                // hzw dynamic
+                TRACE("wzh", tout << "[dynamic] adding cell literals for var: " << x << std::endl;);
                 add_cell_lits(ps, x);
             }
         }
