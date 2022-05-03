@@ -794,7 +794,7 @@ namespace nlsat {
             for (unsigned i = 0; i < sz; i++) {
                 poly * q = ps.get(i);
                 // if (max_var(q) != x) {
-                if(max_stage_poly(q) != x){
+                if(max_stage_poly(q) != find_stage(x)){
                     qs.push_back(q);
                 }
                 else {
@@ -1147,13 +1147,24 @@ namespace nlsat {
             unsigned sz = ps.size();
             for (unsigned k = 0; k < sz; k++) {
                 p = ps.get(k);
-                if (max_var(p) != y)
+                // if (max_var(p) != y)
+                //     continue;
+                
+                // wzh dynamic
+                if(max_stage_poly(p) != find_stage(y)){
                     continue;
+                }
+                // hzw dynamic
+                TRACE("wzh", tout << "[debug] consider polynomial:\n";
+                    m_pm.display(tout, p);
+                    tout << std::endl;
+                );
                 roots.reset();
                 // Variable y is assigned in m_assignment. We must temporarily unassign it.
                 // Otherwise, the isolate_roots procedure will assume p is a constant polynomial.
                 m_am.isolate_roots(p, undef_var_assignment(m_assignment, y), roots);
                 unsigned num_roots = roots.size();
+                TRACE("wzh", tout << "[debug] num roots: " << num_roots << std::endl;);
                 for (unsigned i = 0; i < num_roots; i++) {
                     int s = m_am.compare(y_val, roots[i]);
                     TRACE("nlsat_explain", 
