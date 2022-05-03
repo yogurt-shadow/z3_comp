@@ -1607,17 +1607,24 @@ namespace nlsat {
             }
 
             // wzh reorder static            
-            // if (!can_reorder()) {
+            if (!can_reorder()) {
 
-            // }
-            // else if (m_random_order) {
-            //     shuffle_vars();
-            //     reordered = true;
-            // }
-            // else if (m_reorder) {
-            //     heuristic_reorder();
-            //     reordered = true;
-            // }
+            }
+            else if (m_random_order) {
+                shuffle_vars();
+                reordered = true;
+            }
+            else if (m_reorder) {
+                heuristic_reorder();
+                reordered = true;
+            }
+            TRACE("wzh", tout << "[dynamic] after reorder, show static order:\n";
+                for(var i = 0; i < num_vars(); i++){
+                    tout << "var: " << i << " ";
+                    m_display_var(tout, i);
+                    tout << std::endl;
+                }
+            );
             // hzw reorder static
 
             TRACE("wzh", tout << "show var order:\n"; display_vars(tout););
