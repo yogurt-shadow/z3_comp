@@ -1902,30 +1902,26 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            if(m_xk == null_var){
-                m_xk = 0;
-            }
-            else {
-                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-                if(m_dynamic_vars.size() >= num_vars()){
-                    m_xk = null_var;
-                    m_dynamic_vars.push_back(m_xk);
-                    return;
-                }
-                else{
-                    m_xk++;
-                }
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-                m_display_var(tout, m_xk);
-                tout << " (increasing)" << std::endl;
-            );
-            m_dynamic_vars.push_back(m_xk);
+            // if(m_xk == null_var){
+            //     m_xk = 0;
+            // }
+            // else {
+            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+            //     if(m_dynamic_vars.size() >= num_vars()){
+            //         m_xk = null_var;
+            //     }
+            //     else{
+            //         m_xk++;
+            //     }
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            //     m_display_var(tout, m_xk);
+            //     tout << " (increasing)" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end origin
 
             // reverse select
-            // TODO: debug kissing_3_4 
-            // res: unsat  act: sat
             // if(m_dynamic_vars.size() >= num_vars()){
             //     m_xk = null_var;
             // }
@@ -1936,20 +1932,26 @@ namespace nlsat {
             //     m_xk --;
             // }
             // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            // m_display_var(tout, m_xk);
-            // tout << " (decreasing)" << std::endl;);
+            //     m_display_var(tout, m_xk);
+            //     tout << " (decreasing)" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end reverse
 
             // random select
-            // if(m_dynamic_vars.size() >= num_vars()){
-            //     m_xk = null_var;
-            // }
-            // else {
-            //     m_xk = random_select();
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            // m_display_var(tout, m_xk);
-            // tout << " (random)" << std::endl;);
+            // TODO: kissing_3_7
+            // segmentation error
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
+            }
+            else {
+                m_xk = random_select();
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (random)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end random
         }
 
