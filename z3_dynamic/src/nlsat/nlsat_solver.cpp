@@ -150,8 +150,16 @@ namespace nlsat {
             std::ostream& operator()(std::ostream & out, var x) const override {
                 if (m_proc == nullptr)
                     m_default_display_var(out, x);
-                else
-                    (*m_proc)(out, m_perm[x]);
+                else{
+                    // wzh dynamic
+                    if(x == null_var){
+                        out << " null var " << std::endl;
+                    }
+                    else{
+                        (*m_proc)(out, m_perm[x]);
+                    }
+                    // hzw dynamic
+                }
                 return out;
             }
         };
@@ -1422,9 +1430,10 @@ namespace nlsat {
             // wzh dynamic
             var curr = m_dynamic_vars.back();
             TRACE("wzh", tout << "[dynamic] undo stage and pop dynamic var: " << curr << " "; 
-            m_display_var(tout, curr);
-            tout << std::endl;);
-            m_dynamic_vars.pop_back();
+                m_display_var(tout, curr);
+                tout << std::endl;
+            );
+                m_dynamic_vars.pop_back();
             if(m_dynamic_vars.empty()){
                 m_xk = null_var;
             }
@@ -1893,35 +1902,42 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            // if(m_xk == null_var){
-            //     m_xk = 0;
-            // }
-            // else {
-            //     m_xk++;
-            //     if(m_dynamic_vars.size() >= num_vars()){
-            //         m_xk = null_var;
-            //     }
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            // m_display_var(tout, m_xk);
-            // tout << " (increasing)" << std::endl;);
+            if(m_xk == null_var){
+                m_xk = 0;
+            }
+            else {
+                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                    m_dynamic_vars.push_back(m_xk);
+                    return;
+                }
+                else{
+                    m_xk++;
+                }
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (increasing)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end origin
 
             // reverse select
             // TODO: debug kissing_3_4 
             // res: unsat  act: sat
-            if(m_dynamic_vars.size() >= num_vars()){
-                m_xk = null_var;
-            }
-            else if(m_xk == null_var) {
-                m_xk = num_vars() - 1;
-            }
-            else{
-                m_xk --;
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            m_display_var(tout, m_xk);
-            tout << " (decreasing)" << std::endl;);
+            // if(m_dynamic_vars.size() >= num_vars()){
+            //     m_xk = null_var;
+            // }
+            // else if(m_xk == null_var) {
+            //     m_xk = num_vars() - 1;
+            // }
+            // else{
+            //     m_xk --;
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            // m_display_var(tout, m_xk);
+            // tout << " (decreasing)" << std::endl;);
             // end reverse
 
             // random select
@@ -1935,7 +1951,6 @@ namespace nlsat {
             // m_display_var(tout, m_xk);
             // tout << " (random)" << std::endl;);
             // end random
-            m_dynamic_vars.push_back(m_xk);
         }
 
         // randomly select next var
@@ -1985,6 +2000,7 @@ namespace nlsat {
                 tout << std::endl;
             );
             if(m_bk == null_bool_var && m_dynamic_vars.size() > num_vars()){
+            // if(m_bk == null_bool_var && m_xk == null_var){
                 TRACE("nlsat", tout << "found model\n"; display_assignment(tout););
                 fix_patch();
                 SASSERT(check_satisfied(m_clauses));
@@ -2010,7 +2026,9 @@ namespace nlsat {
             m_conflicts = 0;
 
             while (true) {
+                TRACE("wzh", tout << "[debug] new while true loop\n";);
                 CASSERT("nlsat", check_satisfied());
+                TRACE("wzh", tout << "[debug] p1 m_xk: " << m_xk << "\n";);
                 if (m_xk == null_var) {
                     peek_next_bool_var();
                     if (m_bk == null_bool_var) {
@@ -2019,7 +2037,11 @@ namespace nlsat {
                     }
                 }
                 else {
+                TRACE("wzh", tout << "[debug] p2 m_xk: " << m_xk << "\n";);
+                    
                     new_stage(); // peek next arith var
+                TRACE("wzh", tout << "[debug] p3 m_xk: " << m_xk << "\n";);
+                    
                 }
                 TRACE("nlsat_bug", tout << "xk: x" << m_xk << " bk: b" << m_bk << "\n";);
                 if (is_satisfied()) {
@@ -2162,6 +2184,7 @@ namespace nlsat {
             CTRACE("nlsat_model", r == l_true, tout << "model\n"; display_assignment(tout););
             CTRACE("nlsat", r == l_false, display(tout););
             SASSERT(r != l_true || check_satisfied(m_clauses));
+            TRACE("wzh", tout << "[debug] return check result" << std::endl;);
             return r;
         }
 
