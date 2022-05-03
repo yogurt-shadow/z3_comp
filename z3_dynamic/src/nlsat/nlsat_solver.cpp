@@ -562,13 +562,21 @@ namespace nlsat {
             // return all_assigned_bool(b) && contains_bool(b, x);
             var_vector curr_vars = get_vars_bool(b);
             var stage = find_stage(x);
+            TRACE("wzh", tout << "[dynamic] stage: " << stage << std::endl;);
             bool contain = false;
             for(var v: curr_vars){
+                TRACE("wzh", tout << "[dynamic] loop var: " << v << " ";
+                    m_display_var(tout, v);
+                    tout << std::endl;
+                );
                 if(v == x){
                     contain = true;
+                    TRACE("wzh", tout << "[debug] update contain to true" << std::endl;);
                 }
                 else {
-                    if(find_stage(v) > stage){
+                    var stage2 = find_stage(v);
+                    TRACE("wzh", tout << "[dynamic] stage2: " << stage2 << std::endl;);
+                    if(stage2 > stage){
                         return false;
                     }
                 }
@@ -2300,13 +2308,19 @@ namespace nlsat {
             TRACE("nlsat_resolve", tout << "b_lvl: " << b_lvl << ", is_marked(b): " << is_marked(b) << ", m_num_marks: " << m_num_marks << "\n";);
             if (!is_marked(b)) {
                 mark(b);
+                TRACE("wzh", tout << "[debug] current m_xk: " << m_xk << " ";
+                    m_display_var(tout, m_xk);
+                    tout << std::endl;
+                );
+                // CTRACE("wzh", b_lvl == scope_lvl(), tout << "[debug] same level" << std::endl;);
+                // CTRACE("wzh", same_stage_bool(b, m_xk), tout << "[debug] same stage" << std::endl;);
                 // if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
-                if(b_lvl = scope_lvl() && same_stage_bool(b, m_xk)){
+                if(b_lvl == scope_lvl() && same_stage_bool(b, m_xk)){
                     TRACE("nlsat_resolve", tout << "literal is in the same level and stage, increasing marks\n";);
                     m_num_marks++;
                 }
                 else {
-                    // TRACE("nlsat_resolve", tout << "previous level or stage, adding literal to lemma\n";
+                    TRACE("nlsat_resolve", tout << "previous level or stage, adding literal to lemma\n";);
                     //       tout << "max_var(b): " << max_var(b) << ", m_xk: " << m_xk << ", lvl: " << b_lvl << ", scope_lvl: " << scope_lvl() << "\n";);
                     m_lemma.push_back(antecedent);
                 }
@@ -2565,14 +2579,18 @@ namespace nlsat {
                 }
 
                 // m_lemma is an implicating clause after backtracking current scope level.
-                if (found_decision)
+                if (found_decision){
+                    TRACE("wzh", tout << "[debug] found decision" << std::endl;);
                     break;
+                }
 
                 // If lemma only contains literals from previous stages, then we can stop.
                 // We make progress by returning to a previous stage with additional information (new lemma)
                 // that forces us to select a new partial interpretation
-                if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data()))
+                if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data())){
+                    TRACE("wzh", tout << "[debug] all literals from previous stages" << std::endl;);
                     break;
+                }
                 
                 // Conflict does not depend on the current decision, and it is still in the current stage.
                 // We should find
