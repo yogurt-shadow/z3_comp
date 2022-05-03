@@ -1605,10 +1605,11 @@ namespace nlsat {
                 if (!simplify()) 
                     return l_false;
             }
-            
-            if (!can_reorder()) {
 
-            }
+            // wzh reorder static            
+            // if (!can_reorder()) {
+
+            // }
             // else if (m_random_order) {
             //     shuffle_vars();
             //     reordered = true;
@@ -1617,6 +1618,7 @@ namespace nlsat {
             //     heuristic_reorder();
             //     reordered = true;
             // }
+            // hzw reorder static
 
             TRACE("wzh", tout << "show var order:\n"; display_vars(tout););
             

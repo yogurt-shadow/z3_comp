@@ -1882,27 +1882,19 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            // if(m_xk == null_var){
-            //     m_xk = 0;
-            // }
-            // else {
-            //     m_xk++;
-            //     if(m_dynamic_vars.size() >= num_vars()){
-            //         m_xk = null_var;
-            //     }
-            // }
-            // end origin
-
-            // random select
-            if(m_dynamic_vars.size() >= num_vars()){
-                m_xk = null_var;
+            if(m_xk == null_var){
+                m_xk = 0;
             }
             else {
-                m_xk = random_select();
+                m_xk++;
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                }
             }
-            // end random
+            // end origin
 
             // reverse select
+            // bug: kissing_3_4 res: unsat  act: sat
             // if(m_dynamic_vars.size() >= num_vars()){
             //     m_xk = null_var;
             // }
@@ -1913,6 +1905,16 @@ namespace nlsat {
             //     m_xk --;
             // }
             // end reverse
+
+            // random select
+            // if(m_dynamic_vars.size() >= num_vars()){
+            //     m_xk = null_var;
+            // }
+            // else {
+            //     m_xk = random_select();
+            // }
+            // end random
+
             TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << std::endl;);
             m_dynamic_vars.push_back(m_xk);
         }
@@ -2106,18 +2108,22 @@ namespace nlsat {
                     return l_false;
             }
             
-            if (!can_reorder()) {
+            // wzh reorder static
+            // if (!can_reorder()) {
 
-            }
-            else if (m_random_order) {
-                shuffle_vars();
-                reordered = true;
-            }
-            else if (m_reorder) {
-                heuristic_reorder();
-                reordered = true;
-            }
+            // }
+            // else if (m_random_order) {
+            //     shuffle_vars();
+            //     reordered = true;
+            // }
+            // else if (m_reorder) {
+            //     heuristic_reorder();
+            //     reordered = true;
+            // }
+            // hzw reorder static
+
             // sort_watched_clauses();
+            
             lbool r = search_check();
             CTRACE("nlsat_model", r == l_true, tout << "model before restore order\n"; display_assignment(tout););
             if (reordered) {
