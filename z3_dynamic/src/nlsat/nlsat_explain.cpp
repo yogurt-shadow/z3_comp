@@ -1614,6 +1614,9 @@ namespace nlsat {
         var_vector m_select_tmp;
         ineq_atom * select_lower_stage_eq(scoped_literal_vector & C, var max) {
             var_vector & xs = m_select_tmp;
+            // wzh dynamic
+            var max_stage = find_stage(max);
+            // hzw dynamic
             for (literal l : C) {
                 bool_var b = l.var();
                 atom * a = m_atoms[b];
@@ -1626,8 +1629,14 @@ namespace nlsat {
                     xs.reset();
                     m_pm.vars(p, xs);
                     for (var y : xs) {
-                        if (y >= max)
+                        // if (y >= max)
+                            // continue;
+                        // wzh dynamic
+                        var curr_stage = find_stage(y);
+                        if(curr_stage >= max_stage){
                             continue;
+                        }
+                        // hzw dynamic
                         atom * eq = m_x2eq[y];
                         if (eq == nullptr)
                             continue;
@@ -1670,12 +1679,33 @@ namespace nlsat {
                 SASSERT(eq->size() == 1);
                 SASSERT(!eq->is_even(0));
                 poly * eq_p = eq->p(0);
+                TRACE("wzh", std::cout << "[debug] show poly\n";
+                    m_pm.display(std::cout, eq_p);
+                    std::cout << std::endl;
+                    std::cout << "[debug] show max: " << max << std::endl;
+                    display_dynamic(std::cout);
+                    std::cout << std::endl;
+                );
+                // TODO: failed to verify in kissing_4_5
                 VERIFY(simplify(C, eq_p, max));
                 // add equation as an assumption                
                 TRACE("nlsat_simpilfy_core", display(tout << "adding equality as assumption ", literal(eq->bvar(), true)); tout << "\n";);
                 add_literal(literal(eq->bvar(), true));
             }
         }
+
+        // wzh dynamic
+        std::ostream & display_dynamic(std::ostream & out) const {
+            out << "[dynamic] show dynamic vars:\n";
+            for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
+                var curr = m_dynamic_vars[i];
+                out << "var " << curr << ": ";
+                // m_display_var(out, curr);
+                out << std::endl;
+            }
+            return out;
+        }
+        // hzw dynamic
 
         /**
            \brief Main procedure. The explain the given unsat core, and store the result in m_result

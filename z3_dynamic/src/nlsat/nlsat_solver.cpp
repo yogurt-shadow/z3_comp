@@ -400,6 +400,16 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
+        std::ostream & display_dynamic(std::ostream & out) const {
+            out << "[dynamic] show dynamic vars:\n";
+            for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
+                var curr = m_dynamic_vars[i];
+                out << "var " << curr << ": ";
+                m_display_var(out, curr);
+                out << std::endl;
+            }
+            return out;
+        }
         struct stage_info {
             var m_var;
             var m_stage;
@@ -570,20 +580,20 @@ namespace nlsat {
             // return all_assigned_bool(b) && contains_bool(b, x);
             var_vector curr_vars = get_vars_bool(b);
             var stage = find_stage(x);
-            TRACE("wzh", tout << "[dynamic] stage: " << stage << std::endl;);
+            // TRACE("wzh", tout << "[dynamic] stage: " << stage << std::endl;);
             bool contain = false;
             for(var v: curr_vars){
-                TRACE("wzh", tout << "[dynamic] loop var: " << v << " ";
-                    m_display_var(tout, v);
-                    tout << std::endl;
-                );
+                // TRACE("wzh", tout << "[dynamic] loop var: " << v << " ";
+                    // m_display_var(tout, v);
+                    // tout << std::endl;
+                // );
                 if(v == x){
                     contain = true;
-                    TRACE("wzh", tout << "[debug] update contain to true" << std::endl;);
+                    // TRACE("wzh", tout << "[debug] update contain to true" << std::endl;);
                 }
                 else {
                     var stage2 = find_stage(v);
-                    TRACE("wzh", tout << "[dynamic] stage2: " << stage2 << std::endl;);
+                    // TRACE("wzh", tout << "[dynamic] stage2: " << stage2 << std::endl;);
                     if(stage2 > stage){
                         return false;
                     }
@@ -1830,7 +1840,9 @@ namespace nlsat {
             else if ( satisfy_learned ||
                      !cls.is_learned() /* must always satisfy input clauses */ ||
                       m_lazy == 0 /* if not in lazy mode, we also satiffy lemmas */) {
+                TRACE("wzh", tout << "[debug] enter decide\n";);
                 decide(cls[first_undef]);
+                TRACE("wzh", tout << "[debug] exit decide\n";);
                 updt_infeasible(first_undef_set);
             }
             else {
@@ -1939,7 +1951,7 @@ namespace nlsat {
             // end reverse
 
             // random select
-            // TODO: kissing_3_7
+            // TODO: debug kissing_3_7
             // segmentation error
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
@@ -2030,7 +2042,6 @@ namespace nlsat {
             while (true) {
                 TRACE("wzh", tout << "[debug] new while true loop\n";);
                 CASSERT("nlsat", check_satisfied());
-                TRACE("wzh", tout << "[debug] p1 m_xk: " << m_xk << "\n";);
                 if (m_xk == null_var) {
                     peek_next_bool_var();
                     if (m_bk == null_bool_var) {
@@ -2039,11 +2050,7 @@ namespace nlsat {
                     }
                 }
                 else {
-                TRACE("wzh", tout << "[debug] p2 m_xk: " << m_xk << "\n";);
-                    
                     new_stage(); // peek next arith var
-                TRACE("wzh", tout << "[debug] p3 m_xk: " << m_xk << "\n";);
-                    
                 }
                 TRACE("nlsat_bug", tout << "xk: x" << m_xk << " bk: b" << m_bk << "\n";);
                 if (is_satisfied()) {
@@ -2670,7 +2677,10 @@ namespace nlsat {
                 // We just have to find the maximal variable in m_lemma, and return to that stage
                 // Remark: the lemma may contain only boolean literals, in this case new_max_var == null_var;
                 // var new_max_var = max_var(sz, m_lemma.data());
+
                 var new_max_var = max_stage_lts(sz, m_lemma.data());
+                TRACE("wzh", display_dynamic(tout); tout << std::endl;);
+
                 TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_var << ", curr: " << m_dynamic_vars.size() - 1 << "\n";);
                 undo_until_stage(new_max_var);
                 SASSERT(m_xk == new_max_var);
@@ -2704,6 +2714,7 @@ namespace nlsat {
                 
             }
             NLSAT_VERBOSE(display(verbose_stream(), *new_cls) << "\n";);
+            TRACE("wzh", tout << "[debug] enter process lemma" << std::endl;);
             if (!process_clause(*new_cls, true)) {
                 TRACE("nlsat", tout << "new clause triggered another conflict, restarting conflict resolution...\n";
                       display(tout, *new_cls) << "\n";
