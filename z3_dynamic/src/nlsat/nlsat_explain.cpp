@@ -79,45 +79,45 @@ namespace nlsat {
             bool empty() const { return m_set.empty(); }
             
             // Return max variable in todo_set
-            var max_var() const {
-                pmanager & pm = m_set.m();
-                var max = null_var;
-                unsigned sz = m_set.size();
-                for (unsigned i = 0; i < sz; i++) {
-                    var x = pm.max_var(m_set.get(i));
-                    SASSERT(x != null_var);
-                    if (max == null_var || x > max)
-                        max = x;
-                }
-                return max;
-            }
+            // var max_var() const {
+            //     pmanager & pm = m_set.m();
+            //     var max = null_var;
+            //     unsigned sz = m_set.size();
+            //     for (unsigned i = 0; i < sz; i++) {
+            //         var x = pm.max_var(m_set.get(i));
+            //         SASSERT(x != null_var);
+            //         if (max == null_var || x > max)
+            //             max = x;
+            //     }
+            //     return max;
+            // }
             
             /**
                \brief Remove the maximal polynomials from the set and store
                them in max_polys. Return the maximal variable
              */
-            var remove_max_polys(polynomial_ref_vector & max_polys) {
-                max_polys.reset();
-                var x = max_var();
-                pmanager & pm = m_set.m();
-                unsigned sz = m_set.size();
-                unsigned j  = 0;
-                for (unsigned i = 0; i < sz; i++) {
-                    poly * p = m_set.get(i);
-                    var y = pm.max_var(p);
-                    SASSERT(y <= x);
-                    if (y == x) {
-                        max_polys.push_back(p);
-                        m_in_set[pm.id(p)] = false;
-                    }
-                    else {
-                        m_set.set(j, p);
-                        j++;
-                    }
-                }
-                m_set.shrink(j);
-                return x;
-            }
+            // var remove_max_polys(polynomial_ref_vector & max_polys) {
+            //     max_polys.reset();
+            //     var x = max_var();
+            //     pmanager & pm = m_set.m();
+            //     unsigned sz = m_set.size();
+            //     unsigned j  = 0;
+            //     for (unsigned i = 0; i < sz; i++) {
+            //         poly * p = m_set.get(i);
+            //         var y = pm.max_var(p);
+            //         SASSERT(y <= x);
+            //         if (y == x) {
+            //             max_polys.push_back(p);
+            //             m_in_set[pm.id(p)] = false;
+            //         }
+            //         else {
+            //             m_set.set(j, p);
+            //             j++;
+            //         }
+            //     }
+            //     m_set.shrink(j);
+            //     return x;
+            // }
 
             // wzh dynamic
             void collect_ps(polynomial_ref_vector & res) const {
@@ -239,15 +239,31 @@ namespace nlsat {
             SASSERT(check_already_added());
         }
 
+        // wzh dynamic
+        bool all_assigned_poly(poly const * p) const {
+            var_vector curr_vars;
+            m_pm.vars(p, curr_vars);
+            for(var v: curr_vars){
+                if(!m_assignment.is_assigned(v)){
+                    return false;
+                }
+            }
+            return true;
+        }
+        // hzw dynamic
+
 
         /**
            \brief evaluate the given polynomial in the current interpretation.
            max_var(p) must be assigned in the current interpretation.
         */
         ::sign sign(polynomial_ref const & p) {
-            SASSERT(max_var(p) == null_var || m_assignment.is_assigned(max_var(p)));
+            // SASSERT(max_var(p) == null_var || m_assignment.is_assigned(max_var(p)));
+            // wzh dynamic
+            SASSERT(all_assigned_poly(p));
+            // hzw dynamic
             auto s = m_am.eval_sign_at(p, m_assignment);
-            TRACE("nlsat_explain", tout << "p: " << p << " var: " << max_var(p) << " sign: " << s << "\n";);
+            // TRACE("nlsat_explain", tout << "p: " << p << " var: " << max_var(p) << " sign: " << s << "\n";);
             return s;
         }
         
@@ -266,8 +282,10 @@ namespace nlsat {
         */
         void psc_chain(polynomial_ref & p, polynomial_ref & q, unsigned x, polynomial_ref_vector & result) {
             // TODO caching
-            SASSERT(max_var(p) == max_var(q));
-            SASSERT(max_var(p) == x);
+            // SASSERT(max_var(p) == max_var(q));
+            // SASSERT(max_var(p) == x);
+            SASSERT(max_stage_var_poly(p) == max_stage_var_poly(q));
+            SASSERT(max_stage_var_poly(p) == x);
             m_cache.psc_chain(p, q, x, result);
         }
         
@@ -342,7 +360,10 @@ namespace nlsat {
         */
         void elim_vanishing(polynomial_ref & p) {
             SASSERT(!is_const(p));
-            var x = max_var(p);
+            // var x = max_var(p);
+            // wzh dynamic
+            var x = max_stage_var_poly(p);
+            // hzw dynamic
             unsigned k = degree(p, x);
             SASSERT(k > 0);
             polynomial_ref lc(m_pm);
@@ -353,7 +374,10 @@ namespace nlsat {
                     return;
                 if (k == 0) {
                     // x vanished from p, peek next maximal variable
-                    x = max_var(p);
+                    // x = max_var(p);
+                    // wzh dynamic
+                    x = max_stage_var_poly(p);
+                    // hzw dynamic
                     SASSERT(x != null_var);
                     k = degree(p, x);
                 }
@@ -449,15 +473,21 @@ namespace nlsat {
                 int atom_sign = 1;
                 unsigned sz = a->size();
                 bool normalized = false; // true if the literal needs to be normalized
+
+                // wzh dynamic
+                var max_stage = find_stage(max);
+                // hzw dynamic
                 for (unsigned i = 0; i < sz; i++) {
                     p = a->p(i);
-                    if (max_var(p) == max)
+                    // if (max_var(p) == max)
+                    if(max_stage_var_poly(p) == max)
                         elim_vanishing(p); // eliminate vanishing coefficients of max
-                    if (is_const(p) || max_var(p) < max) {
+                    // if (is_const(p) || max_var(p) < max) {
+                    if(is_const(p) || max_stage_poly(p) < max_stage){
                         int s = sign(p); 
                         if (!is_const(p)) {
-                            SASSERT(max_var(p) != null_var);
-                            SASSERT(max_var(p) < max);
+                            // SASSERT(max_var(p) != null_var);
+                            SASSERT(max_stage_poly(p) < max_stage);
                             // factor p is a lower stage polynomial, so we should add assumption to justify p being eliminated
                             if (s == 0)
                                 add_simple_assumption(atom::EQ, p);  // add assumption p = 0
@@ -766,6 +796,20 @@ namespace nlsat {
                 }
             }
             return x;
+        }
+
+        var max_stage_var_poly(poly const * p) const {
+            var_vector curr;
+            m_pm.vars(p, curr);
+            var res_x = null_var, max_stage = 0;
+            for(var v: curr){
+                var curr_stage = find_stage(v);
+                if(res_x == null_var || curr_stage > max_stage){
+                    max_stage = curr_stage;
+                    res_x = v;
+                }
+            }
+            return res_x;
         }
 
         var max_stage_root(root_atom const * a) const {
@@ -1527,7 +1571,10 @@ namespace nlsat {
             bool modified_core = false;
             eq_info info;
             info.m_eq = eq;
-            info.m_x  = m_pm.max_var(info.m_eq);
+            // info.m_x  = m_pm.max_var(info.m_eq);
+            // wzh dynamic
+            info.m_x = max_stage_var_poly(info.m_eq);
+            // hzw dynamic
             info.m_k  = m_pm.degree(eq, info.m_x);
             polynomial_ref lc_eq(m_pm);
             lc_eq           = m_pm.coeff(eq, info.m_x, info.m_k);
@@ -1679,13 +1726,13 @@ namespace nlsat {
                 SASSERT(eq->size() == 1);
                 SASSERT(!eq->is_even(0));
                 poly * eq_p = eq->p(0);
-                TRACE("wzh", std::cout << "[debug] show poly\n";
-                    m_pm.display(std::cout, eq_p);
-                    std::cout << std::endl;
-                    std::cout << "[debug] show max: " << max << std::endl;
-                    display_dynamic(std::cout);
-                    std::cout << std::endl;
-                );
+                // TRACE("wzh", std::cout << "[debug] show poly\n";
+                //     m_pm.display(std::cout, eq_p);
+                //     std::cout << std::endl;
+                //     std::cout << "[debug] show max: " << max << std::endl;
+                //     display_dynamic(std::cout);
+                //     std::cout << std::endl;
+                // );
                 // TODO: failed to verify in kissing_4_5
                 VERIFY(simplify(C, eq_p, max));
                 // add equation as an assumption                
@@ -1734,6 +1781,7 @@ namespace nlsat {
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
                 TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
+                // TODO: debug simplify for kissing_4_5
                 simplify(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
                 main(m_core2.size(), m_core2.data());
@@ -1963,7 +2011,8 @@ namespace nlsat {
             for (unsigned i = 0; i < ps.size(); ++i) {
                 p = ps.get(i);
                 int s = sign(p);
-                if (max_var(p) != x) {
+                // if (max_var(p) != x) {
+                if(max_stage_poly(p) != find_stage(x)){
                     atom::kind k = (s == 0)?(atom::EQ):((s < 0)?(atom::LT):(atom::GT));
                     add_simple_assumption(k, p, false);
                     ps[i] = ps.back();
