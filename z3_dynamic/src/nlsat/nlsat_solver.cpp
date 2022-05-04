@@ -1455,6 +1455,7 @@ namespace nlsat {
         }
 
         void undo_new_level() {
+            TRACE("wzh", tout << "[debug] undo new level" << std::endl;);
             SASSERT(m_scope_lvl > 0);
             m_scope_lvl--;
             m_evaluator.pop(1);
@@ -1598,7 +1599,7 @@ namespace nlsat {
             m_justifications[b] = j;
             save_assign_trail(b);
             updt_eq(b, j);
-            TRACE("nlsat_assign", tout << "b" << b << " -> " << m_bvalues[b]  << "\n";);
+            TRACE("nlsat_assign", tout << "[debug] bool assign: b" << b << " -> " << m_bvalues[b]  << "\n";);
         }
 
         /**
@@ -1962,6 +1963,7 @@ namespace nlsat {
             TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
                 m_display_var(tout, m_xk);
                 tout << " (random)" << std::endl;
+                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
             );
             m_dynamic_vars.push_back(m_xk);
             // end random
@@ -2007,12 +2009,7 @@ namespace nlsat {
         bool is_satisfied() {
             // if (m_bk == null_bool_var && m_xk >= num_vars()) {
             TRACE("wzh", tout << "[dynamic] num of vars is: " << num_vars() << std::endl;);
-            TRACE("wzh", tout << "[dynamic] dynamic vars is: ";
-                for(var v: m_dynamic_vars){
-                    tout << v << " ";
-                }
-                tout << std::endl;
-            );
+            TRACE("wzh", display_dynamic(tout););
             if(m_bk == null_bool_var && m_dynamic_vars.size() > num_vars()){
             // if(m_bk == null_bool_var && m_xk == null_var){
                 TRACE("nlsat", tout << "found model\n"; display_assignment(tout););
@@ -2391,7 +2388,6 @@ namespace nlsat {
 
             m_lazy_clause.reset();
             // wzh dynamic
-            // fix_projection_order(jst.num_lits(), jst.lits());
             m_explain(jst.num_lits(), jst.lits(), m_dynamic_vars, m_lazy_clause);
             // hzw dynamic
             for (unsigned i = 0; i < sz; i++)
@@ -2424,7 +2420,11 @@ namespace nlsat {
                 }
             });
             checkpoint();
+            // we do not resolve clause for dynamic orderings
+            // we just backtrack and continue search
+            // wzh resolve learnt
             resolve_clause(b, m_lazy_clause.size(), m_lazy_clause.data());
+            // hzw resolve learnt
 
             for (unsigned i = 0; i < jst.num_clauses(); ++i) {
                 clause const& c = jst.clause(i);
@@ -2460,6 +2460,11 @@ namespace nlsat {
                 SASSERT(value(ls[i]) == l_false);
                 if (assigned_value(l) == l_false) {
                     unsigned lvl = m_levels[b];
+                    TRACE("wzh", tout << "[debug] loop literal in max_scoped_lvl: ";
+                        display(tout, l);
+                        tout << std::endl;
+                        tout << "current level: " << m_levels[b] << std::endl;
+                    );
                     if (lvl > max)
                         max = lvl;
                 }
@@ -2480,7 +2485,7 @@ namespace nlsat {
            \pre This method assumes value(ls[i]) is l_false for i in [0, num)
         */
         void remove_literals_from_lvl(scoped_literal_vector & lemma, unsigned lvl) {
-            TRACE("nlsat_resolve", tout << "removing literals from lvl: " << lvl << " and stage " << m_xk << "\n";);
+            TRACE("nlsat_resolve", tout << "removing literals from lvl: " << lvl << " and stage " << find_stage(m_xk) << "\n";);
             unsigned sz = lemma.size();
             unsigned j  = 0;
             for (unsigned i = 0; i < sz; i++) {
@@ -2489,7 +2494,17 @@ namespace nlsat {
                 SASSERT(is_marked(b));
                 SASSERT(value(lemma[i]) == l_false);
                 // if (assigned_value(l) == l_false && m_levels[b] == lvl && max_var(b) == m_xk) {
+                TRACE("wzh", tout << "[debug] loop literal: ";
+                        display(tout, l);
+                        tout << std::endl;
+                        tout << "current level: " << m_levels[b] << std::endl;
+                );
+                // if (assigned_value(l) == l_false && m_levels[b] == lvl) {
                 if (assigned_value(l) == l_false && m_levels[b] == lvl && same_stage_bool(b, m_xk)) {
+                    TRACE("wzh", tout << "[debug] loop literal: ";
+                        display(tout, l);
+                        tout << std::endl;
+                    );
                     m_num_marks++;
                     continue;
                 }
@@ -2631,11 +2646,27 @@ namespace nlsat {
                 //    - backtrack to this level
                 //    - and continue conflict resolution from there
                 //    - we must bump m_num_marks for literals removed from m_lemma
+                TRACE("wzh", tout << "[debug] enter max scoped level" << std::endl;);
                 unsigned max_lvl = max_scope_lvl(m_lemma.size(), m_lemma.data());
                 TRACE("nlsat_resolve", tout << "conflict does not depend on current decision, backtracking to level: " << max_lvl << "\n";);
                 SASSERT(max_lvl < scope_lvl());
+                TRACE("wzh", tout << "[debug] before remove lemma:\n";
+                    display(tout, m_lemma);
+                    tout << std::endl;
+                    tout << "[debug] current stage: " << find_stage(m_xk) << " var: " << m_xk << " ";
+                    m_display_var(tout, m_xk);
+                    tout << std::endl;
+                    display_dynamic(tout);
+                    tout << std::endl;
+                );
                 remove_literals_from_lvl(m_lemma, max_lvl);
+                TRACE("wzh", tout << "[debug] after remove lemma:\n";
+                    display(tout, m_lemma);
+                    tout << std::endl;
+                );
+                TRACE("wzh", tout << "[debug] enter undo until level" << std::endl;);
                 undo_until_level(max_lvl);
+                TRACE("wzh", tout << "[debug] exit undo until level" << std::endl;);
                 top = m_trail.size();
                 TRACE("nlsat_resolve", tout << "scope_lvl: " << scope_lvl() << " num marks: " << m_num_marks << "\n";);
                 SASSERT(scope_lvl() == max_lvl);
@@ -2678,15 +2709,16 @@ namespace nlsat {
                 // Remark: the lemma may contain only boolean literals, in this case new_max_var == null_var;
                 // var new_max_var = max_var(sz, m_lemma.data());
 
-                var new_max_var = max_stage_lts(sz, m_lemma.data());
+                var new_max_stage = max_stage_lts(sz, m_lemma.data());
                 TRACE("wzh", display_dynamic(tout); tout << std::endl;);
-
-                TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_var << ", curr: " << m_dynamic_vars.size() - 1 << "\n";);
-                undo_until_stage(new_max_var);
-                SASSERT(m_xk == new_max_var);
+                //TODO: debug kissing_3_7 segmentation error
+                // backtracking to stage UINT_MAX?
+                TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_stage << ", curr: " << m_dynamic_vars.size() - 1 << "\n";);
+                undo_until_stage(new_max_stage);
+                // SASSERT(m_xk == new_max_stage);
                 new_cls = mk_clause(sz, m_lemma.data(), true, m_lemma_assumptions.get());
-                TRACE("nlsat", tout << "new_level: " << scope_lvl() << "\nnew_stage: " << new_max_var << "\n"; 
-                      if (new_max_var != null_var) m_display_var(tout, new_max_var) << "\n";);
+                TRACE("nlsat", tout << "new_level: " << scope_lvl() << "\nnew_stage: " << new_max_stage << "\n"; 
+                      if (new_max_stage != null_var) m_display_var(tout, new_max_stage) << "\n";);
             }
             else {
                 SASSERT(scope_lvl() >= 1);
