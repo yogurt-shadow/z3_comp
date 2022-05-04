@@ -165,6 +165,10 @@ namespace nlsat {
 
         evaluator &             m_evaluator;
 
+        // wzh dynamic cache
+        var_vector m_find_stage;
+        // hzw dynamic cache
+
         imp(solver & s, assignment const & x2v, polynomial::cache & u, atom_vector const & atoms, atom_vector const & x2eq,
             evaluator & ev):
             m_solver(s),
@@ -188,6 +192,10 @@ namespace nlsat {
             m_full_dimensional = false;
             m_minimize_cores   = false;
             m_signed_project   = false;
+
+            // wzh dynamic
+            m_find_stage.reset();
+            // hzw dynamic
         }
         
         ~imp() {
@@ -643,7 +651,7 @@ namespace nlsat {
             return res_x;
         }
 
-        var max_stage_or_unassigned_lts(unsigned num, literal const * ls) const {
+        var max_stage_or_unassigned_lts(unsigned num, literal const * ls) {
             var_vector curr_vars = get_vars_lts(num, ls);
             var max_stage = null_var, res_x = null_var;
             for(var v: curr_vars){
@@ -659,7 +667,7 @@ namespace nlsat {
             return res_x;
         }
 
-        var max_stage_or_unassigned_atom(atom const * a) const {
+        var max_stage_or_unassigned_atom(atom const * a) {
             var_vector res = get_vars_atom(a);
             var max_stage = null_var;
             var res_x = null_var;
@@ -676,7 +684,7 @@ namespace nlsat {
             return res_x;
         }
 
-        var_vector get_vars_lts(unsigned num, literal const * ls) const {
+        var_vector get_vars_lts(unsigned num, literal const * ls) {
             var_vector res;
             for(unsigned i = 0; i < num; i++){
                 literal l = ls[i];
@@ -758,23 +766,23 @@ namespace nlsat {
             return x;
         }
 
-        var max_stage_literal(literal l) const {
+        var max_stage_literal(literal l) {
             SASSERT(all_assigned_literal(l));
             return max_stage_bool(l.var());
         }
 
-        var max_stage_bool(bool_var b) const {
+        var max_stage_bool(bool_var b) {
             return max_stage_atom(m_atoms[b]);
         }
 
-        var max_stage_atom(atom const * a) const {
+        var max_stage_atom(atom const * a) {
             if(a == nullptr){
                 return null_var;
             }
             return a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : max_stage_root(to_root_atom(a));
         }
 
-        var max_stage_ineq(ineq_atom const * a) const {
+        var max_stage_ineq(ineq_atom const * a) {
             var res = null_var;
             for(unsigned i = 0; i < a->size(); i++){
                 var curr = max_stage_poly(a->p(i));
@@ -785,7 +793,7 @@ namespace nlsat {
             return res;
         }
 
-        var max_stage_poly(poly const * p) const {
+        var max_stage_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
             var x = null_var;
@@ -798,7 +806,7 @@ namespace nlsat {
             return x;
         }
 
-        var max_stage_var_poly(poly const * p) const {
+        var max_stage_var_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
             var res_x = null_var, max_stage = 0;
@@ -812,15 +820,19 @@ namespace nlsat {
             return res_x;
         }
 
-        var max_stage_root(root_atom const * a) const {
+        var max_stage_root(root_atom const * a) {
             var p_stage = max_stage_poly(a->p());
             var x_stage = find_stage(a->x());
             return p_stage > x_stage ? p_stage : x_stage;
         }
 
-        var find_stage(var x) const {
+        var find_stage(var x) {
+            if(m_find_stage[x] != UINT_MAX){
+                return m_find_stage[x];
+            }
             for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
                 if(m_dynamic_vars[i] == x){
+                    m_find_stage[x] = i;
                     return i;
                 }
             }
@@ -1883,10 +1895,15 @@ namespace nlsat {
             SASSERT(num > 0);
             // wzh dynamic
             m_dynamic_vars.reset();
+            var m_max = 0;
             for(var v: dynamic){
                 m_dynamic_vars.push_back(v);
+                if(v > m_max){
+                    m_max = v;
+                }
                 TRACE("wzh", tout << "[dynamic] dynamic vars: " << v << std::endl;);
             }
+            m_find_stage.resize(m_max+1, UINT_MAX);
             // hzw dynamic
             TRACE("nlsat_explain", 
                   tout << "[explain] set of literals is infeasible in the current interpretation\n"; 
