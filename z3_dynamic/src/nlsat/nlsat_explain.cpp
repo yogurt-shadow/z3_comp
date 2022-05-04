@@ -1733,7 +1733,6 @@ namespace nlsat {
                 //     display_dynamic(std::cout);
                 //     std::cout << std::endl;
                 // );
-                // TODO: failed to verify in kissing_4_5
                 VERIFY(simplify(C, eq_p, max));
                 // add equation as an assumption                
                 TRACE("nlsat_simpilfy_core", display(tout << "adding equality as assumption ", literal(eq->bvar(), true)); tout << "\n";);

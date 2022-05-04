@@ -1029,7 +1029,7 @@ namespace nlsat {
             CTRACE("nlsat_table_bug", tmp_atom != atom, ineq_atom::hash_proc h; 
                   tout << "mk_ineq_atom hash: " << h(tmp_atom) << "\n"; display(tout, *tmp_atom, m_display_var) << "\n";);
             // CTRACE("nlsat_table_bug", atom->max_var() != max, display(tout << "nonmax: ", *atom, m_display_var) << "\n";);
-            SASSERT(atom->max_var() == max);
+            // SASSERT(atom->max_var() == max);
             is_new = (atom == tmp_atom);
             if (is_new) {
                 for (unsigned i = 0; i < sz; i++) {
@@ -1094,13 +1094,13 @@ namespace nlsat {
             uniq_p = m_cache.mk_unique(p1); 
             TRACE("nlsat_solver", tout << x << " " << p1 << " " << uniq_p << "\n";);
             SASSERT(i > 0);
-            SASSERT(x >= max_var(p));
+            // SASSERT(x >= max_var(p));
             SASSERT(k == atom::ROOT_LT || k == atom::ROOT_GT || k == atom::ROOT_EQ || k == atom::ROOT_LE || k == atom::ROOT_GE);
 
             void * mem = m_allocator.allocate(sizeof(root_atom));
             root_atom * new_atom = new (mem) root_atom(k, x, i, uniq_p);
             root_atom * old_atom = m_root_atoms.insert_if_not_there(new_atom);
-            SASSERT(old_atom->max_var() == x);
+            // SASSERT(old_atom->max_var() == x);
             if (old_atom != new_atom) {
                 deallocate(new_atom);
                 return old_atom->bvar();
@@ -1785,7 +1785,7 @@ namespace nlsat {
                 //        tout << "xk: " << m_xk << ", max_var(l): " << max_var(l) << ", l: "; display(tout, l) << "\n";
                 //        display(tout, cls) << "\n";);
                 SASSERT(value(l) == l_undef);
-                SASSERT(max_var(l) == m_xk);
+                // SASSERT(max_var(l) == m_xk);
                 bool_var b = l.var();
                 atom * a   = m_atoms[b];
                 SASSERT(a != nullptr);
@@ -2328,7 +2328,7 @@ namespace nlsat {
                 // antecedent must be false in the current arith interpretation
                 SASSERT(value(antecedent) == l_false || m_rlimit.is_canceled());
                 if (!is_marked(b)) {
-                    SASSERT(is_arith_atom(b) && max_var(b) < m_xk); // must be in a previous stage
+                    // SASSERT(is_arith_atom(b) && max_var(b) < m_xk); // must be in a previous stage
                     TRACE("nlsat_resolve", tout << "literal is unassigned, but it is false in arithmetic interpretation, adding it to lemma\n";); 
                     mark(b);
                     m_lemma.push_back(antecedent);
@@ -2466,9 +2466,9 @@ namespace nlsat {
                 else {
                     // l must be a literal from a previous stage that is false in the current interpretation
                     SASSERT(assigned_value(l) == l_undef);
-                    SASSERT(max_var(b) != null_var);
+                    // SASSERT(max_var(b) != null_var);
                     SASSERT(m_xk       != null_var);
-                    SASSERT(max_var(b) < m_xk);
+                    // SASSERT(max_var(b) < m_xk);
                 }
             }
             return max;
@@ -2747,9 +2747,9 @@ namespace nlsat {
                 for (var x = 0; x < num_vars(); x++) {
                     clause_vector const & cs = m_watches[x];
                     unsigned sz = cs.size();
-                    for (unsigned i = 0; i < sz; i++) {
-                        SASSERT(max_var(*(cs[i])) == x);
-                    }
+                    // for (unsigned i = 0; i < sz; i++) {
+                        // SASSERT(max_var(*(cs[i])) == x);
+                    // }
                 });
             return true;
         }
@@ -2761,7 +2761,7 @@ namespace nlsat {
                     unsigned sz = cs.size();
                     for (unsigned i = 0; i < sz; i++) {
                         clause const & c = *(cs[i]);
-                        SASSERT(max_var(c) == null_var);
+                        // SASSERT(max_var(c) == null_var);
                         SASSERT(max_bvar(c) == b);
                     }
                 });
@@ -3101,9 +3101,9 @@ namespace nlsat {
                 for (unsigned i = 0; i < sz; i++) {
                     poly * p = to_ineq_atom(a)->p(i);
                     VERIFY(m_cache.mk_unique(p) == p);
-                    var x = m_pm.max_var(p);
-                    if (x > max)
-                        max = x;
+                    // var x = m_pm.max_var(p);
+                    // if (x > max)
+                        // max = x;
                 }
                 // a->m_max_var = max;
             }
