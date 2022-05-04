@@ -132,6 +132,7 @@ namespace nlsat {
         //
         // -----------------------
         var_vector m_dynamic_vars;
+        var_vector m_find_stage;
         // var_vector m_project_order;
         // hzw dynamic
 
@@ -501,7 +502,7 @@ namespace nlsat {
             return m_xk != _a->x();
         }
 
-        var max_stage_lts(unsigned sz, literal const * cls) const {
+        var max_stage_lts(unsigned sz, literal const * cls) {
             var x      = null_var;
             for (unsigned i = 0; i < sz; i++) {
                 literal l = cls[i];
@@ -514,23 +515,23 @@ namespace nlsat {
             return x;
         }
 
-        var max_stage_literal(literal l) const {
+        var max_stage_literal(literal l) {
             SASSERT(all_assigned_literal(l));
             return max_stage_bool(l.var());
         }
 
-        var max_stage_bool(bool_var b) const {
+        var max_stage_bool(bool_var b) {
             return max_stage_atom(m_atoms[b]);
         }
 
-        var max_stage_atom(atom const * a) const {
+        var max_stage_atom(atom const * a) {
             if(a == nullptr){
                 return null_var;
             }
             return a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : max_stage_root(to_root_atom(a));
         }
 
-        var max_stage_ineq(ineq_atom const * a) const {
+        var max_stage_ineq(ineq_atom const * a) {
             var res = null_var;
             for(unsigned i = 0; i < a->size(); i++){
                 var curr = max_stage_poly(a->p(i));
@@ -541,7 +542,7 @@ namespace nlsat {
             return res;
         }
 
-        var max_stage_poly(poly const * p) const {
+        var max_stage_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
             var x = null_var;
@@ -554,15 +555,19 @@ namespace nlsat {
             return x;
         }
 
-        var max_stage_root(root_atom const * a) const {
+        var max_stage_root(root_atom const * a) {
             var p_stage = max_stage_poly(a->p());
             var x_stage = find_stage(a->x());
             return p_stage > x_stage ? p_stage : x_stage;
         }
 
-        var find_stage(var x) const {
+        var find_stage(var x) {
+            if(m_find_stage[x] != UINT_MAX){
+                return m_find_stage[x];
+            }
             for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
                 if(m_dynamic_vars[i] == x){
+                    m_find_stage[x] = i;
                     return i;
                 }
             }
@@ -571,12 +576,12 @@ namespace nlsat {
         }
 
 
-        bool same_stage_literal(literal l, var x) const {
+        bool same_stage_literal(literal l, var x) {
             return same_stage_bool(l.var(), x);
         }
 
         // max_var(b) == x
-        bool same_stage_bool(bool_var b, var x) const {
+        bool same_stage_bool(bool_var b, var x) {
             // return all_assigned_bool(b) && contains_bool(b, x);
             var_vector curr_vars = get_vars_bool(b);
             var stage = find_stage(x);
@@ -603,7 +608,7 @@ namespace nlsat {
         }
 
         // max_var(a) == x
-        bool same_stage_atom(atom const * a, var x) const {
+        bool same_stage_atom(atom const * a, var x) {
             // return all_assigned_atom(a) && contains_atom(a, x);
             var_vector curr_vars = get_vars_atom(a);
             var stage = find_stage(x);
@@ -1443,7 +1448,10 @@ namespace nlsat {
                 m_display_var(tout, curr);
                 tout << std::endl;
             );
-                m_dynamic_vars.pop_back();
+            m_dynamic_vars.pop_back();
+            if(curr != null_var){
+                m_find_stage[curr] = UINT_MAX;
+            }
             if(m_dynamic_vars.empty()){
                 m_xk = null_var;
             }
@@ -1915,23 +1923,23 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            // if(m_xk == null_var){
-            //     m_xk = 0;
-            // }
-            // else {
-            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-            //     if(m_dynamic_vars.size() >= num_vars()){
-            //         m_xk = null_var;
-            //     }
-            //     else{
-            //         m_xk++;
-            //     }
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (increasing)" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
+            if(m_xk == null_var){
+                m_xk = 0;
+            }
+            else {
+                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                }
+                else{
+                    m_xk++;
+                }
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (increasing)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end origin
 
             // reverse select
@@ -1952,20 +1960,18 @@ namespace nlsat {
             // end reverse
 
             // random select
-            // TODO: debug kissing_3_7
-            // segmentation error
-            if(m_dynamic_vars.size() >= num_vars()){
-                m_xk = null_var;
-            }
-            else {
-                m_xk = random_select();
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-                m_display_var(tout, m_xk);
-                tout << " (random)" << std::endl;
-                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
-            );
-            m_dynamic_vars.push_back(m_xk);
+            // if(m_dynamic_vars.size() >= num_vars()){
+            //     m_xk = null_var;
+            // }
+            // else {
+            //     m_xk = random_select();
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            //     m_display_var(tout, m_xk);
+            //     tout << " (random)" << std::endl;
+            //     tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end random
         }
 
@@ -2204,6 +2210,9 @@ namespace nlsat {
                 m_bvalues[i] = l_undef;
             }
             m_assignment.reset();
+            // wzh dynamic
+            m_find_stage.resize(num_vars() + 1, UINT_MAX);
+            // hzw dynamic
         }
 
         lbool check(literal_vector& assumptions) {
@@ -2436,7 +2445,7 @@ namespace nlsat {
         /**
            \brief Return true if all literals in ls are from previous stages.
         */
-        bool only_literals_from_previous_stages(unsigned num, literal const * ls) const {
+        bool only_literals_from_previous_stages(unsigned num, literal const * ls) {
             for (unsigned i = 0; i < num; i++) {
                 // if (max_var(ls[i]) == m_xk)
                 //     return false;
@@ -2711,8 +2720,6 @@ namespace nlsat {
 
                 var new_max_stage = max_stage_lts(sz, m_lemma.data());
                 TRACE("wzh", display_dynamic(tout); tout << std::endl;);
-                //TODO: debug kissing_3_7 segmentation error
-                // backtracking to stage UINT_MAX?
                 TRACE("nlsat_resolve", tout << "backtracking to stage: " << new_max_stage << ", curr: " << m_dynamic_vars.size() - 1 << "\n";);
                 undo_until_stage(new_max_stage);
                 // SASSERT(m_xk == new_max_stage);

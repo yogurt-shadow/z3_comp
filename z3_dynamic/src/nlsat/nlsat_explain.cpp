@@ -1723,12 +1723,12 @@ namespace nlsat {
             // Simplify using equations in the core
             while (!C.empty()) {
                 poly * eq = select_eq(C, max);
+                if (eq == nullptr)
+                    break;
                 TRACE("wzh", tout << "[debug] select equal for simplify\n";
                     m_pm.display(tout, eq);
                     tout << std::endl;
                 );
-                if (eq == nullptr)
-                    break;
                 TRACE("nlsat_simplify_core", tout << "using equality for simplifying core\n"; 
                       m_pm.display(tout, eq, m_solver.display_proc()); tout << "\n";);
                 if (!simplify(C, eq, max))
@@ -1796,7 +1796,6 @@ namespace nlsat {
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
                 TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
-                // TODO: debug simplify for kissing_3_7
                 simplify(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
                 main(m_core2.size(), m_core2.data());
