@@ -494,13 +494,13 @@ namespace nlsat {
             return res;
         }
 
-        bool is_root_reverse(atom * a) const {
-            if(a == nullptr || !a->is_root_atom()){
-                return false;
-            }
-            root_atom * _a = to_root_atom(a);
-            return m_xk != _a->x();
-        }
+        // bool is_root_reverse(atom * a) const {
+        //     if(a == nullptr || !a->is_root_atom()){
+        //         return false;
+        //     }
+        //     root_atom * _a = to_root_atom(a);
+        //     return m_xk != _a->x();
+        // }
 
         var max_stage_lts(unsigned sz, literal const * cls) {
             var x      = null_var;
@@ -737,12 +737,17 @@ namespace nlsat {
         }
 
         bool only_left_and_ordered_root(root_atom const * a, var x) const {
+            SASSERT(!m_assignment.is_assigned(x));
+            // if we do not leave only x(), disable this atom
             if(a->x() != x){
                 return false;
             }
             var_vector curr_vars;
             m_pm.vars(a->p(), curr_vars);
             for(var v: curr_vars){
+                if(v == x){
+                    continue;;
+                }
                 if(!m_assignment.is_assigned(v)){
                     return false;
                 }
@@ -1791,23 +1796,32 @@ namespace nlsat {
             for (unsigned idx = 0; idx < cls.size(); ++idx) {
                 literal l = cls[idx];
                 checkpoint();
-                if (value(l) == l_false)
+                lbool val = value(l);
+                // if (value(l) == l_false)
+                    // continue;
+                // if (value(l) == l_true)
+                    // return true;  // could happen if clause is a tautology
+                if(val == l_false){
                     continue;
-                if (value(l) == l_true)
-                    return true;  // could happen if clause is a tautology
+                }
+                if(val == l_true){
+                    return true;
+                }
+                SASSERT(val == l_undef);
                 // CTRACE("nlsat", max_var(l) != m_xk || value(l) != l_undef, display(tout); 
                 //        tout << "xk: " << m_xk << ", max_var(l): " << max_var(l) << ", l: "; display(tout, l) << "\n";
                 //        display(tout, cls) << "\n";);
-                SASSERT(value(l) == l_undef);
+                // SASSERT(value(l) == l_undef);
                 // SASSERT(max_var(l) == m_xk);
                 bool_var b = l.var();
                 atom * a   = m_atoms[b];
                 SASSERT(a != nullptr);
                 interval_set_ref curr_set(m_ism);
                 // we disable this root atom
-                if(is_root_reverse(a)){
-                    continue;
-                }
+                // TRACE("wzh", tout << "[debug] enter root reverse" << std::endl;);
+                // if(is_root_reverse(a)){
+                //     continue;
+                // }
                 // curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls);
                 curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls, m_xk);
                 TRACE("nlsat_inf_set", tout << "infeasible set for literal: "; display(tout, l); tout << "\n"; m_ism.display(tout, curr_set); tout << "\n";
