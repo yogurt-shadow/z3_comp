@@ -21,6 +21,7 @@ Revision History:
 #include "ast/ast_util.h"
 #include "ast/ast_pp.h"
 #include "ast/pb_decl_plugin.h"
+#include "ast/recfun_decl_plugin.h"
 #include "ast/rewriter/th_rewriter.h"
 #include "ast/rewriter/rewriter_def.h"
 #include "ast/rewriter/hoist_rewriter.h"
@@ -64,7 +65,8 @@ class solve_eqs_tactic : public tactic {
             m_a_util(m),
             m_num_steps(0),
             m_num_eliminated_vars(0),
-            m_marked_candidates(m) {
+            m_marked_candidates(m),
+            m_var_trail(m) {
             updt_params(p);
             if (m_r == nullptr)
                 m_r = mk_default_expr_replacer(m, true);
@@ -407,6 +409,9 @@ class solve_eqs_tactic : public tactic {
         }
 
         void insert_solution(goal const& g, unsigned idx, expr* f, app* var, expr* def, proof* pr) {
+
+            if (!is_safe(var))
+                return;
             m_vars.push_back(var);
             m_candidates.push_back(f);
             m_candidate_set.mark(f);
@@ -520,7 +525,14 @@ class solve_eqs_tactic : public tactic {
             }
         }
 
+        expr_mark m_compatible_tried;
+        expr_ref_vector m_var_trail;
+
         bool is_compatible(goal const& g, unsigned idx, vector<nnf_context> const & path, expr* v, expr* eq) {
+            if (m_compatible_tried.is_marked(v))
+                return false;
+            m_compatible_tried.mark(v);
+            m_var_trail.push_back(v);
             expr_mark occ;
             svector<lbool> cache;
             mark_occurs(occ, g, v);
@@ -645,7 +657,7 @@ class solve_eqs_tactic : public tactic {
                 for (unsigned i = 0; i < args.size(); ++i) {
                     pr = nullptr;
                     expr* arg = args.get(i), *lhs = nullptr, *rhs = nullptr;
-                    if (m().is_eq(arg, lhs, rhs)) {                         
+                    if (m().is_eq(arg, lhs, rhs) && !m().is_bool(lhs)) {                
                         if (trivial_solve1(lhs, rhs, var, def, pr) && is_compatible(g, idx, path, var, arg)) {
                             insert_solution(g, idx, arg, var, def, pr);
                         }
@@ -707,8 +719,21 @@ class solve_eqs_tactic : public tactic {
                 pr1 = m().mk_transitivity(pr1, pr2);
                 if (!pr1) pr1 = g.pr(idx); else pr1 = m().mk_modus_ponens(g.pr(idx), pr1);
                 g.update(idx, tmp2, pr1, g.dep(idx));
-            }
-            
+            }            
+        }
+
+        expr_mark m_unsafe_vars;        
+
+        void filter_unsafe_vars() {
+            m_unsafe_vars.reset();
+            recfun::util rec(m());
+            for (func_decl* f : rec.get_rec_funs()) 
+                for (expr* term : subterms::all(expr_ref(rec.get_def(f).get_rhs(), m())))
+                    m_unsafe_vars.mark(term);            
+        }
+
+        bool is_safe(expr* f) {
+            return !m_unsafe_vars.is_marked(f);
         }
         
         void sort_vars() {
@@ -1020,6 +1045,8 @@ class solve_eqs_tactic : public tactic {
                 m_subst      = alloc(expr_substitution, m(), m_produce_unsat_cores, m_produce_proofs);
                 m_norm_subst = alloc(expr_substitution, m(), m_produce_unsat_cores, m_produce_proofs);
                 unsigned rounds = 0;
+
+                filter_unsafe_vars();
                 while (rounds < 20) {
                     ++rounds;
                     if (!m_produce_proofs && m_context_solve && rounds < 3) {
@@ -1070,9 +1097,11 @@ public:
         dealloc(m_imp);
     }
 
+    char const* name() const override { return "solve_eqs"; }
+
     void updt_params(params_ref const & p) override {
-        m_params = p;
-        m_imp->updt_params(p);
+        m_params.append(p);
+        m_imp->updt_params(m_params);
     }
 
     void collect_param_descrs(param_descrs & r) override {        

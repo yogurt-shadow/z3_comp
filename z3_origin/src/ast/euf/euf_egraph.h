@@ -32,6 +32,7 @@ Notes:
 #include "ast/euf/euf_enode.h"
 #include "ast/euf/euf_etable.h"
 #include "ast/ast_ll_pp.h"
+#include <vector>
 
 namespace euf {
 
@@ -104,10 +105,12 @@ namespace euf {
             struct value_assignment {};
             struct lbl_hash {};
             struct lbl_set {};
-            enum class tag_t { is_set_parent, is_add_node, is_toggle_merge, 
+            struct update_children {};
+            struct set_relevant {};
+            enum class tag_t { is_set_parent, is_add_node, is_toggle_merge, is_update_children,
                     is_add_th_var, is_replace_th_var, is_new_lit, is_new_th_eq,
                     is_lbl_hash, is_new_th_eq_qhead, is_new_lits_qhead, 
-                    is_inconsistent, is_value_assignment, is_lbl_set };
+                    is_inconsistent, is_value_assignment, is_lbl_set, is_set_relevant };
             tag_t  tag;
             enode* r1;
             enode* n1;
@@ -148,6 +151,10 @@ namespace euf {
                 tag(tag_t::is_lbl_hash), r1(n), n1(nullptr), m_lbl_hash(n->m_lbl_hash) {}
             update_record(enode* n, lbl_set):
                 tag(tag_t::is_lbl_set), r1(n), n1(nullptr), m_lbls(n->m_lbls.get()) {}    
+            update_record(enode* n, update_children) :
+                tag(tag_t::is_update_children), r1(n), n1(nullptr), r2_num_parents(UINT_MAX) {}
+            update_record(enode* n, set_relevant) :
+                tag(tag_t::is_set_relevant), r1(n), n1(nullptr), r2_num_parents(UINT_MAX) {}
         };
         ast_manager&           m;
         svector<to_merge>      m_to_merge;
@@ -156,27 +163,30 @@ namespace euf {
         svector<update_record> m_updates;
         unsigned_vector        m_scopes;
         enode_vector           m_expr2enode;
-        enode*                 m_tmp_eq { nullptr };
-        enode*                 m_tmp_node { nullptr };
-        unsigned               m_tmp_node_capacity { 0 };
+        enode*                 m_tmp_eq = nullptr;
+        enode*                 m_tmp_node = nullptr;
+        unsigned               m_tmp_node_capacity = 0;
+        tmp_app                m_tmp_app;
         enode_vector           m_nodes;
         expr_ref_vector        m_exprs;
+        func_decl_ref_vector   m_eq_decls;
         vector<enode_vector>   m_decl2enodes;
         enode_vector           m_empty_enodes;
-        unsigned               m_num_scopes { 0 };
-        bool                   m_inconsistent { false };
-        enode                  *m_n1 { nullptr };
-        enode                  *m_n2 { nullptr };
+        unsigned               m_num_scopes = 0;
+        bool                   m_inconsistent = false;
+        enode                  *m_n1 = nullptr;
+        enode                  *m_n2 = nullptr;
         justification          m_justification;
-        unsigned               m_new_lits_qhead { 0 };
-        unsigned               m_new_th_eqs_qhead { 0 };
+        unsigned               m_new_lits_qhead = 0;
+        unsigned               m_new_th_eqs_qhead = 0;
         svector<enode_bool_pair>  m_new_lits;
         svector<th_eq>         m_new_th_eqs;
         bool_vector            m_th_propagates_diseqs;
         enode_vector           m_todo;
         stats                  m_stats;
-        bool                   m_uses_congruence { false };
-        std::function<void(enode*,enode*)>     m_on_merge;
+        bool                   m_uses_congruence = false;
+        bool                   m_default_relevant = true;
+        std::vector<std::function<void(enode*,enode*)>>     m_on_merge;
         std::function<void(enode*)>            m_on_make;
         std::function<void(expr*,expr*,expr*)> m_used_eq;
         std::function<void(app*,app*)>         m_used_cc;  
@@ -210,18 +220,14 @@ namespace euf {
         void push_to_lca(enode* a, enode* lca);
         void push_congruence(enode* n1, enode* n2, bool commutative);
         void push_todo(enode* n);
-        void toggle_merge_enabled(enode* n);
+        void toggle_merge_enabled(enode* n, bool backtracking);
 
         enode_bool_pair insert_table(enode* p);
         void erase_from_table(enode* p);
 
         template <typename T>
-        void explain_eq(ptr_vector<T>& justifications, enode* a, enode* b, justification const& j) {
-            if (j.is_external())
-                justifications.push_back(j.ext<T>());
-            else if (j.is_congruence()) 
-                push_congruence(a, b, j.is_commutative());
-        }
+        void explain_eq(ptr_vector<T>& justifications, enode* a, enode* b, justification const& j);
+
         template <typename T>
         void explain_todo(ptr_vector<T>& justifications);
 
@@ -234,7 +240,7 @@ namespace euf {
         enode* find(expr* f, unsigned n, enode* const* args);
         enode* mk(expr* f, unsigned generation, unsigned n, enode *const* args);
         enode_vector const& enodes_of(func_decl* f);
-        void push() { ++m_num_scopes; }
+        void push() { if (!m_to_merge.empty()) propagate(); ++m_num_scopes; }
         void pop(unsigned num_scopes);
 
         /**
@@ -259,9 +265,11 @@ namespace euf {
         /**
         * \brief check if two nodes are known to be disequal.
         */
-        bool are_diseq(enode* a, enode* b) const;
+        bool are_diseq(enode* a, enode* b);
 
-        enode * get_enode_eq_to(func_decl * f, unsigned num_args, enode * const * args) { UNREACHABLE(); return nullptr; }
+        enode* get_enode_eq_to(func_decl* f, unsigned num_args, enode* const* args);
+
+        enode* tmp_eq(enode* a, enode* b);
 
         /**
            \brief Maintain and update cursor into propagated consequences.
@@ -283,10 +291,12 @@ namespace euf {
         void add_th_var(enode* n, theory_var v, theory_id id);
         void set_th_propagates_diseqs(theory_id id);
         void set_merge_enabled(enode* n, bool enable_merge);
-        void set_value(enode* n, lbool value);
+        void set_value(enode* n, lbool value, justification j);
         void set_bool_var(enode* n, unsigned v) { n->set_bool_var(v); }
+        void set_relevant(enode* n);
+        void set_default_relevant(bool b) { m_default_relevant = b; }
 
-        void set_on_merge(std::function<void(enode* root,enode* other)>& on_merge) { m_on_merge = on_merge; }
+        void set_on_merge(std::function<void(enode* root,enode* other)>& on_merge) { m_on_merge.push_back(on_merge); }
         void set_on_make(std::function<void(enode* n)>& on_make) { m_on_make = on_make; }
         void set_used_eq(std::function<void(expr*,expr*,expr*)>& used_eq) { m_used_eq = used_eq; }
         void set_used_cc(std::function<void(app*,app*)>& used_cc) { m_used_cc = used_cc; }
@@ -326,6 +336,7 @@ namespace euf {
         void collect_statistics(statistics& st) const;
 
         unsigned num_scopes() const { return m_scopes.size() + m_num_scopes; }
+        unsigned num_nodes() const { return m_nodes.size(); }
     };
 
     inline std::ostream& operator<<(std::ostream& out, egraph const& g) { return g.display(out); }

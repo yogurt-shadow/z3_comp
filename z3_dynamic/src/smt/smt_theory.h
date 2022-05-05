@@ -453,9 +453,6 @@ namespace smt {
         
         std::ostream& display_flat_app(std::ostream & out, app * n) const;
         
-        std::ostream& display_var_def(std::ostream & out, theory_var v) const { return display_app(out, get_enode(v)->get_expr()); }
-        
-        std::ostream& display_var_flat_def(std::ostream & out, theory_var v) const { return display_flat_app(out, get_enode(v)->get_expr());  }
 
     protected:
         void log_axiom_instantiation(app * r, unsigned axiom_id = UINT_MAX, unsigned num_bindings = 0, 
@@ -481,6 +478,7 @@ namespace smt {
         }
 
         void log_axiom_unit(app* r) {
+            expr_ref _r(r, m);
             log_axiom_instantiation(r);
             m.trace_stream() << "[end-of-instance]\n";
         }
@@ -617,6 +615,12 @@ namespace smt {
         bool is_relevant_and_shared(enode * n) const;
 
         bool assume_eq(enode * n1, enode * n2);
+
+
+        /**
+         * \brief theory plugin for fixed values.
+         */
+        virtual bool is_fixed_propagated(theory_var v, expr_ref& val, literal_vector & explain) { return false; }
     };
     
 };

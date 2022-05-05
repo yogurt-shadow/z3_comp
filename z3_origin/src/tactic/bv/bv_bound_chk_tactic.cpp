@@ -140,6 +140,7 @@ public:
     void cleanup() override;
     void collect_statistics(statistics & st) const override;
     void reset_statistics() override;
+    char const* name() const override { return "bv_bound_chk"; }
 };
 
 class bv_bound_chk_tactic::imp {
@@ -205,8 +206,8 @@ tactic * bv_bound_chk_tactic::translate(ast_manager & m) {
 
 
 void bv_bound_chk_tactic::updt_params(params_ref const & p) {
-    m_params = p;
-    m_imp->updt_params(p);
+    m_params.append(p);
+    m_imp->updt_params(m_params);
 }
 
 void bv_bound_chk_tactic::cleanup() {

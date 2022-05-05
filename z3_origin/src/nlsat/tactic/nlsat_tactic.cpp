@@ -55,8 +55,8 @@ class nlsat_tactic : public tactic {
         }
         
         void updt_params(params_ref const & p) {
-            m_params = p;
-            m_solver.updt_params(p);
+            m_params.append(p);
+            m_solver.updt_params(m_params);
         }
         
         bool contains_unsupported(expr_ref_vector & b2a, expr_ref_vector & x2t) {
@@ -133,8 +133,6 @@ class nlsat_tactic : public tactic {
 
         void operator()(goal_ref const & g, 
                         goal_ref_buffer & result) {
-            TRACE("nlsat", g->display(tout););
-
             tactic_report report("nlsat", *g);
             
             if (g->is_decided()) {
@@ -225,8 +223,10 @@ public:
         SASSERT(m_imp == 0);
     }
 
+    char const* name() const override { return "nlsat"; }
+
     void updt_params(params_ref const & p) override {
-        m_params = p;
+        m_params.append(p);
     }
 
     void collect_param_descrs(param_descrs & r) override {

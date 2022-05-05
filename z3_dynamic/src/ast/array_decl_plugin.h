@@ -45,6 +45,8 @@ enum array_op_kind {
     OP_ARRAY_EXT,
     OP_ARRAY_DEFAULT,
     OP_ARRAY_MAP,
+    OP_ARRAY_MAXDIFF,
+    OP_ARRAY_MINDIFF,
     OP_SET_UNION,
     OP_SET_INTERSECT,
     OP_SET_DIFFERENCE,
@@ -149,20 +151,30 @@ public:
     bool is_store(expr* n) const { return is_app_of(n, m_fid, OP_STORE); }
     bool is_const(expr* n) const { return is_app_of(n, m_fid, OP_CONST_ARRAY); }
     bool is_ext(expr* n) const { return is_app_of(n, m_fid, OP_ARRAY_EXT); }
+    bool is_ext(func_decl const* f) const { return is_decl_of(f, m_fid, OP_ARRAY_EXT); }
     bool is_map(expr* n) const { return is_app_of(n, m_fid, OP_ARRAY_MAP); }
+    bool is_union(expr* n) const { return is_app_of(n, m_fid, OP_SET_UNION); }
+    bool is_intersect(expr* n) const { return is_app_of(n, m_fid, OP_SET_INTERSECT); }
+    bool is_difference(expr* n) const { return is_app_of(n, m_fid, OP_SET_DIFFERENCE); }
+    bool is_complement(expr* n) const { return is_app_of(n, m_fid, OP_SET_COMPLEMENT); }
     bool is_as_array(expr * n) const { return is_app_of(n, m_fid, OP_AS_ARRAY); }
     bool is_as_array(expr * n, func_decl*& f) const { return is_as_array(n) && (f = get_as_array_func_decl(n), true); }
+    bool is_maxdiff(expr const* n) const { return is_app_of(n, m_fid, OP_ARRAY_MAXDIFF); }
+    bool is_mindiff(expr const* n) const { return is_app_of(n, m_fid, OP_ARRAY_MINDIFF); }
     bool is_set_has_size(expr* e) const { return is_app_of(e, m_fid, OP_SET_HAS_SIZE); }
     bool is_set_card(expr* e) const { return is_app_of(e, m_fid, OP_SET_CARD); }
     bool is_select(func_decl* f) const { return is_decl_of(f, m_fid, OP_SELECT); }
     bool is_store(func_decl* f) const { return is_decl_of(f, m_fid, OP_STORE); }
     bool is_const(func_decl* f) const { return is_decl_of(f, m_fid, OP_CONST_ARRAY); }
     bool is_map(func_decl* f) const { return is_decl_of(f, m_fid, OP_ARRAY_MAP); }
+    bool is_union(func_decl* f) const { return is_decl_of(f, m_fid, OP_SET_UNION); }
+    bool is_intersect(func_decl* f) const { return is_decl_of(f, m_fid, OP_SET_INTERSECT); }
     bool is_as_array(func_decl* f) const { return is_decl_of(f, m_fid, OP_AS_ARRAY); }
     bool is_set_has_size(func_decl* f) const { return is_decl_of(f, m_fid, OP_SET_HAS_SIZE); }
     bool is_set_card(func_decl* f) const { return is_decl_of(f, m_fid, OP_SET_CARD); }
     bool is_default(func_decl* f) const { return is_decl_of(f, m_fid, OP_ARRAY_DEFAULT); }
     bool is_default(expr* n) const { return is_app_of(n, m_fid, OP_ARRAY_DEFAULT); }
+    bool is_subset(expr const* n) const { return is_app_of(n, m_fid, OP_SET_SUBSET); }
     bool is_as_array(func_decl* f, func_decl*& g) const { return is_decl_of(f, m_fid, OP_AS_ARRAY) && (g = get_as_array_func_decl(f), true); }
     func_decl * get_as_array_func_decl(expr * n) const;
     func_decl * get_as_array_func_decl(func_decl* f) const;
@@ -172,6 +184,10 @@ public:
     bool is_const(expr* e, expr*& v) const;
 
     bool is_store_ext(expr* e, expr_ref& a, expr_ref_vector& args, expr_ref& value);
+
+    MATCH_BINARY(is_subset);
+    MATCH_BINARY(is_maxdiff);
+    MATCH_BINARY(is_mindiff);
 };
 
 class array_util : public array_recognizers {
@@ -262,6 +278,8 @@ public:
     func_decl * mk_array_ext(sort* domain, unsigned i);
 
     sort * mk_array_sort(sort* dom, sort* range) { return mk_array_sort(1, &dom, range); }
+    sort * mk_array_sort(sort* a, sort* b, sort* range) { sort* dom[2] = { a, b }; return mk_array_sort(2, dom, range); }
+    sort * mk_array_sort(sort* a, sort* b, sort* c, sort* range) { sort* dom[3] = { a, b, c}; return mk_array_sort(3, dom, range); }
 
     sort * mk_array_sort(unsigned arity, sort* const* domain, sort* range);
 

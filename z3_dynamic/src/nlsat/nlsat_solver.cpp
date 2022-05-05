@@ -1940,7 +1940,7 @@ namespace nlsat {
                 tout << " (increasing)" << std::endl;
             );
             m_dynamic_vars.push_back(m_xk);
-            // end origin
+            // end increasing
 
             // reverse select
             // if(m_dynamic_vars.size() >= num_vars()){

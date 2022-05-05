@@ -301,26 +301,27 @@ namespace arith {
         m_explanation.add_pair(j, v);
     }
 
-    void solver::add_eq(lpvar u, lpvar v, lp::explanation const& e) {
+    bool solver::add_eq(lpvar u, lpvar v, lp::explanation const& e, bool is_fixed) {
         if (s().inconsistent())
-            return;
+            return false;
         theory_var uv = lp().local_to_external(u); // variables that are returned should have external representations
         theory_var vv = lp().local_to_external(v); // so maybe better to have them already transformed to external form
         if (is_equal(uv, vv))
-            return;
+            return false;
         enode* n1 = var2enode(uv);
         enode* n2 = var2enode(vv);
         expr* e1 = n1->get_expr();
         expr* e2 = n2->get_expr();
-        if (m.is_ite(e1) || m.is_ite(e2))
-            return;
+        if (!is_fixed && !a.is_numeral(e1) && !a.is_numeral(e2) && (m.is_ite(e1) || m.is_ite(e2)))
+            return false;
         if (e1->get_sort() != e2->get_sort())
-            return;
+            return false;
         reset_evidence();
         for (auto ev : e)
             set_evidence(ev.ci(), m_core, m_eqs);
         auto* jst = euf::th_explain::propagate(*this, m_core, m_eqs, n1, n2);
         ctx.propagate(n1, n2, jst->to_index());
+        return true;
     }
 
     bool solver::bound_is_interesting(unsigned vi, lp::lconstraint_kind kind, const rational& bval) const {
@@ -548,18 +549,21 @@ namespace arith {
         found_compatible = false;
         for (; it != end; ++it) {
             api_bound* a2 = *it;
-            if (a1 == a2) continue;
-            if (a2->get_bound_kind() != kind) continue;
+            if (a1 == a2)
+                continue;
+            if (a2->get_bound_kind() != kind)
+                continue;
             rational const& k2(a2->get_value());
             found_compatible = true;
-            if (k1 < k2) {
+            if (k1 < k2) 
                 return it;
-            }
         }
         return end;
     }
 
     void solver::dbg_finalize_model(model& mdl) {
+        if (m_not_handled)
+            return;
         bool found_bad = false;
         for (unsigned v = 0; v < get_num_vars(); ++v) {
             if (!is_bool(v))
@@ -581,6 +585,27 @@ namespace arith {
                 value = ~value;
             if (!found_bad && value == get_phase(n->bool_var()))
                 continue;
+
+            TRACE("arith",
+                ptr_vector<expr> nodes;
+                expr_mark marks;
+                nodes.push_back(n->get_expr());
+                for (unsigned i = 0; i < nodes.size(); ++i) {
+                    expr* r = nodes[i];
+                    if (marks.is_marked(r))
+                        continue;
+                    marks.mark(r);
+                    if (is_app(r))
+                        for (expr* arg : *to_app(r))
+                            nodes.push_back(arg);
+                    expr_ref rval(m);                    
+                    expr_ref mval = mdl(r);
+                    if (ctx.get_egraph().find(r))
+                        rval = mdl(ctx.get_egraph().find(r)->get_root()->get_expr());
+                    tout << r->get_id() << ": " << mk_bounded_pp(r, m, 1) << " := " << mval;
+                    if (rval != mval) tout << " " << rval;
+                    tout << "\n";
+                });
             TRACE("arith",
                 tout << eval << " " << value << " " << ctx.bpp(n) << "\n";
                 tout << mdl << "\n";
@@ -605,7 +630,7 @@ namespace arith {
         else if (use_nra_model() && lp().external_to_local(v) != lp::null_lpvar) {
             anum const& an = nl_value(v, *m_a1);
             if (a.is_int(o) && !m_nla->am().is_int(an))
-                value = a.mk_numeral(rational::zero(), a.is_int(o));
+                value = a.mk_numeral(rational::zero(), a.is_int(o));       
             else
                 value = a.mk_numeral(m_nla->am(), nl_value(v, *m_a1), a.is_int(o));
         }
@@ -617,7 +642,7 @@ namespace arith {
                 r = floor(r);
             value = a.mk_numeral(r, o->get_sort());
         }
-        else if (a.is_arith_expr(o)) {
+        else if (a.is_arith_expr(o) && reflect(o)) {
             expr_ref_vector args(m);
             for (auto* arg : *to_app(o)) {
                 if (m.is_value(arg))
@@ -931,6 +956,7 @@ namespace arith {
             if (n1->get_root() == n2->get_root())
                 continue;
             literal eq = eq_internalize(n1, n2);
+            ctx.mark_relevant(eq);
             if (s().value(eq) != l_true)
                 return true;
         }
@@ -964,7 +990,7 @@ namespace arith {
         IF_VERBOSE(12, verbose_stream() << "final-check " << lp().get_status() << "\n");
         SASSERT(lp().ax_is_correct());
 
-        if (lp().get_status() != lp::lp_status::OPTIMAL) {
+        if (!lp().is_feasible() || lp().has_changed_columns()) {
             switch (make_feasible()) {
             case l_false:
                 get_infeasibility_explanation_and_set_conflict();
@@ -1075,6 +1101,8 @@ namespace arith {
             return l_false;
         case lp::lp_status::FEASIBLE:
         case lp::lp_status::OPTIMAL:
+        case lp::lp_status::UNBOUNDED:
+            SASSERT(!lp().has_changed_columns());
             return l_true;
         case lp::lp_status::TIME_EXHAUSTED:
         default:
@@ -1422,21 +1450,19 @@ namespace arith {
             TRACE("arith", tout << "canceled\n";);
             return l_undef;
         }
-        if (!m_nla) {
-            TRACE("arith", tout << "no nla\n";);
+        CTRACE("arith", !m_nla, tout << "no nla\n";);
+        if (!m_nla) 
             return l_true;
-        }
         if (!m_nla->need_check())
             return l_true;
 
         m_a1 = nullptr; m_a2 = nullptr;
         lbool r = m_nla->check(m_nla_lemma_vector);
         switch (r) {
-        case l_false: {
+        case l_false: 
             for (const nla::lemma& l : m_nla_lemma_vector)
                 false_case_of_check_nla(l);
             break;
-        }
         case l_true:
             if (assume_eqs())
                 return l_false;
@@ -1453,11 +1479,28 @@ namespace arith {
     }
 
     bool solver::include_func_interp(func_decl* f) const {
-        return 
-            a.is_div0(f) ||
-            a.is_idiv0(f) ||
-            a.is_power0(f) ||
-            a.is_rem0(f) ||
-            a.is_mod0(f);        
+        SASSERT(f->get_family_id() == get_id());
+        switch (f->get_decl_kind()) {
+        case OP_ADD:
+        case OP_SUB:
+        case OP_UMINUS:
+        case OP_MUL:
+        case OP_LE:
+        case OP_LT:
+        case OP_GE:
+        case OP_GT:
+        case OP_MOD:
+        case OP_REM:
+        case OP_DIV:
+        case OP_IDIV:
+        case OP_POWER:
+        case OP_IS_INT:
+        case OP_TO_INT:
+        case OP_TO_REAL:
+        case OP_NUM:
+            return false;
+        default:
+            return true;            
+        }
     }
 }

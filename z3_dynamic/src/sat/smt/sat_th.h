@@ -52,7 +52,7 @@ namespace euf {
         virtual void apply_sort_cnstr(enode* n, sort* s) {}
 
         /**
-           \record that an equality has been internalized.
+           \brief Record that an equality has been internalized.
          */
         virtual void eq_internalized(enode* n) {}
 
@@ -95,6 +95,11 @@ namespace euf {
           \brief conclude model building
         */
         virtual void finalize_model(model& mdl) {}
+
+        /**
+        * \brief does solver have an unhandled function.
+        */
+        virtual bool has_unhandled() const { return false; }
     };
 
     class th_solver : public sat::extension, public th_model_builder, public th_decompile, public th_internalizer {
@@ -110,6 +115,12 @@ namespace euf {
         virtual bool use_diseqs() const { return false; }
 
         virtual void new_diseq_eh(euf::th_eq const& eq) {}
+
+        virtual bool enable_ackerman_axioms(euf::enode* n) const { return true; }
+
+        virtual bool is_fixed(euf::theory_var v, expr_ref& val, sat::literal_vector& lits) { return false; }
+
+        virtual void relevant_eh(euf::enode* n) {}
 
         /**
            \brief Parametric theories (e.g. Arrays) should implement this method.
@@ -139,7 +150,8 @@ namespace euf {
         bool add_clause(sat::literal a, sat::literal b);
         bool add_clause(sat::literal a, sat::literal b, sat::literal c);
         bool add_clause(sat::literal a, sat::literal b, sat::literal c, sat::literal d);
-        bool add_clause(sat::literal_vector const& lits);
+        bool add_clause(sat::literal_vector const& lits) { return add_clause(lits.size(), lits.data()); }
+        bool add_clause(unsigned n, sat::literal* lits);
         void add_equiv(sat::literal a, sat::literal b);
         void add_equiv_and(sat::literal a, sat::literal_vector const& bs);
 
@@ -176,12 +188,14 @@ namespace euf {
         enode* expr2enode(expr* e) const;
         enode* var2enode(theory_var v) const { return m_var2enode[v]; }
         expr* var2expr(theory_var v) const { return var2enode(v)->get_expr(); }
+        bool is_representative(theory_var v) const { return v == get_representative(v); }
         expr* bool_var2expr(sat::bool_var v) const;
         expr_ref literal2expr(sat::literal lit) const;
         enode* bool_var2enode(sat::bool_var v) const { expr* e = bool_var2expr(v); return e ? expr2enode(e) : nullptr; }
         sat::literal mk_literal(expr* e) const;
         theory_var get_th_var(enode* n) const { return n->get_th_var(get_id()); }
         theory_var get_th_var(expr* e) const;
+        theory_var get_representative(theory_var v) const;
         trail_stack& get_trail_stack();
         bool is_attached_to_var(enode* n) const;
         bool is_root(theory_var v) const { return var2enode(v)->is_root(); }

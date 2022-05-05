@@ -288,6 +288,7 @@ namespace sat {
             m_free_vars.pop_back();
             m_active_vars.push_back(v);
             reset_var(v, ext, dvar);
+            SASSERT(v < m_justification.size());
             return v;
         }
         m_active_vars.push_back(v);
@@ -342,9 +343,7 @@ namespace sat {
     clause* solver::mk_clause(unsigned num_lits, literal * lits, sat::status st) {
         m_model_is_current = false;
             
-        for (unsigned i = 0; i < num_lits; i++) 
-            VERIFY(!was_eliminated(lits[i]));
-        
+
         DEBUG_CODE({
                 for (unsigned i = 0; i < num_lits; i++) {
                     CTRACE("sat", was_eliminated(lits[i]), tout << lits[i] << " was eliminated\n";);
@@ -1304,7 +1303,8 @@ namespace sat {
         flet<bool> _searching(m_searching, true);
         m_clone = nullptr;
         if (m_mc.empty() && gparams::get_ref().get_bool("model_validate", false)) {
-            m_clone = alloc(solver, m_params, m_rlimit);
+            
+            m_clone = alloc(solver, m_no_drat_params, m_rlimit);
             m_clone->copy(*this);
             m_clone->set_extension(nullptr);
         }
@@ -1892,11 +1892,8 @@ namespace sat {
     void solver::init_ext_assumptions() {
         if (m_ext && m_ext->tracking_assumptions()) {
             m_ext_assumption_set.reset();
-            unsigned trail_size = m_trail.size();
             if (!inconsistent())
-                m_ext->add_assumptions();
-            for (unsigned i = trail_size; i < m_trail.size(); ++i)
-                m_ext_assumption_set.insert(m_trail[i]);
+                m_ext->add_assumptions(m_ext_assumption_set);
         }
     }
 
@@ -2224,6 +2221,7 @@ namespace sat {
     bool solver::should_restart() const {
         if (m_conflicts_since_restart <= m_restart_threshold) return false;
         if (scope_lvl() < 2 + search_lvl()) return false;
+        if (m_case_split_queue.empty()) return false;
         if (m_config.m_restart != RS_EMA) return true;
         return 
             m_fast_glue_avg + search_lvl() <= scope_lvl() && 
@@ -2314,9 +2312,9 @@ namespace sat {
     }
 
     unsigned solver::restart_level(bool to_base) {
-        if (to_base || scope_lvl() == search_lvl()) {
-            return scope_lvl() - search_lvl();
-        }
+        SASSERT(!m_case_split_queue.empty());
+        if (to_base || scope_lvl() == search_lvl()) 
+            return scope_lvl() - search_lvl();        
         else {
             bool_var next = m_case_split_queue.min_var();
 
@@ -2969,11 +2967,9 @@ namespace sat {
             }
             break;
         case PS_SAT_CACHING:
-            if (m_search_state == s_sat) {
-                for (unsigned i = 0; i < m_phase.size(); ++i) {
-                    m_phase[i] = m_best_phase[i];
-                }
-            }
+            if (m_search_state == s_sat) 
+                for (unsigned i = 0; i < m_phase.size(); ++i) 
+                    m_phase[i] = m_best_phase[i];                            
             break;
         case PS_RANDOM:
             for (auto& p : m_phase) p = (m_rand() % 2) == 0;
@@ -3011,7 +3007,7 @@ namespace sat {
         svector<double> logits(vars.size(), 0.0);
         double itau = m_config.m_reorder_itau;
         double lse = 0;
-        double mid = m_rand.max_value()/2;
+        double mid = (double)(m_rand.max_value()/2);
         double max = 0;
         for (double& f : logits) {
             f = itau * (m_rand() - mid)/mid;
@@ -3511,7 +3507,6 @@ namespace sat {
         unsigned old_num_vars = m_vars_lim.pop(num_scopes);
         if (old_num_vars == m_active_vars.size())
             return;
-        unsigned free_vars_head = m_free_vars.size();
         unsigned sz = m_active_vars.size(), j = old_num_vars;
         unsigned new_lvl = m_scopes.size() - num_scopes;
 
@@ -3534,16 +3529,14 @@ namespace sat {
 
         for (unsigned i = old_num_vars; i < sz; ++i) {
             bool_var v = m_active_vars[i];
-            if (is_visited(v) || is_active(v)) {
+            if (is_external(v) || is_visited(v) || is_active(v)) {
                 m_vars_to_reinit.push_back(v);
                 m_active_vars[j++] = v;
                 m_var_scope[v] = new_lvl;
             }
             else {
                 set_eliminated(v, true);
-                if (!is_external(v) || true) {
-                    m_free_vars.push_back(v);                   
-                }
+                m_vars_to_free.push_back(v);                                   
             }
         }
         m_active_vars.shrink(j);
@@ -3553,8 +3546,7 @@ namespace sat {
                 IF_VERBOSE(0, verbose_stream() << "cleanup: " << lit << " " << w.is_binary_clause() << "\n");
             }
         };
-        for (unsigned i = m_free_vars.size(); i-- > free_vars_head; ) {
-            bool_var v = m_free_vars[i];
+        for (bool_var v : m_vars_to_free) {
             cleanup_watch(literal(v, false));
             cleanup_watch(literal(v, true));
             
@@ -3563,7 +3555,7 @@ namespace sat {
             tout << "clauses to reinit: " << (m_clauses_to_reinit.size() - old_sz) << "\n";
             tout << "new level:         " << new_lvl << "\n";
             tout << "vars to reinit:    " << m_vars_to_reinit << "\n";
-            tout << "free vars:         " << bool_var_vector(m_free_vars.size() - free_vars_head, m_free_vars.data() + free_vars_head) << "\n";
+            tout << "free vars:         " << bool_var_vector(m_vars_to_free) << "\n";
             for (unsigned i = m_clauses_to_reinit.size(); i-- > old_sz; )
                 tout << "reinit:           " << m_clauses_to_reinit[i] << "\n";
             display(tout););        
@@ -3602,7 +3594,6 @@ namespace sat {
     void solver::pop(unsigned num_scopes) {
         if (num_scopes == 0)
             return;
-        unsigned free_vars_head = m_free_vars.size();
         if (m_ext) {
             pop_vars(num_scopes);
             m_ext->pop(num_scopes);
@@ -3612,13 +3603,16 @@ namespace sat {
         scope & s        = m_scopes[new_lvl];
         m_inconsistent   = false; // TBD: use model seems to make this redundant: s.m_inconsistent;
         unassign_vars(s.m_trail_lim, new_lvl);
-        for (unsigned i = m_free_vars.size(); i-- > free_vars_head; )
-            m_case_split_queue.del_var_eh(m_free_vars[i]);
+        for (bool_var v : m_vars_to_free)
+            m_case_split_queue.del_var_eh(v);
         m_scope_lvl -= num_scopes;
         reinit_clauses(s.m_clauses_to_reinit_lim);
         m_scopes.shrink(new_lvl);
-        if (m_ext) 
+        if (m_ext) {
             m_ext->pop_reinit();
+            m_free_vars.append(m_vars_to_free);
+            m_vars_to_free.reset();
+        }
     }
 
     void solver::unassign_vars(unsigned old_sz, unsigned new_lvl) {
@@ -3659,17 +3653,17 @@ namespace sat {
             clause_wrapper cw = m_clauses_to_reinit[i];
             bool reinit = false;
             if (cw.is_binary()) {
-                if (propagate_bin_clause(cw[0], cw[1]) && !at_base_lvl()) 
+                if (propagate_bin_clause(cw[0], cw[1]) && !at_base_lvl())
                     m_clauses_to_reinit[j++] = cw;
-                else if (has_variables_to_reinit(cw[0], cw[1]))
+                else if (has_variables_to_reinit(cw[0], cw[1]) && !at_base_lvl())
                     m_clauses_to_reinit[j++] = cw;
             }
             else {
                 clause & c = *(cw.get_clause());
                 if (ENABLE_TERNARY && c.size() == 3) {
-                    if (!at_base_lvl() && propagate_ter_clause(c))
+                    if (propagate_ter_clause(c) && !at_base_lvl())
                         m_clauses_to_reinit[j++] = cw;                
-                    else if (has_variables_to_reinit(c))
+                    else if (has_variables_to_reinit(c) && !at_base_lvl())
                         m_clauses_to_reinit[j++] = cw;
                     else 
                         c.set_reinit_stack(false);
@@ -3677,13 +3671,13 @@ namespace sat {
                 }
                 detach_clause(c);
                 attach_clause(c, reinit);
-                if (!at_base_lvl() && reinit) 
+                if (reinit && !at_base_lvl()) 
                     // clause propagated literal, must keep it in the reinit stack.
                     m_clauses_to_reinit[j++] = cw;                
-                else if (has_variables_to_reinit(c))
+                else if (has_variables_to_reinit(c) && !at_base_lvl())
                     m_clauses_to_reinit[j++] = cw;
                 else 
-                    c.set_reinit_stack(false);                
+                    c.set_reinit_stack(false);   
             }
         }
         m_clauses_to_reinit.shrink(j);
@@ -3695,6 +3689,7 @@ namespace sat {
     //
 
     void solver::user_push() {
+
         pop_to_base_level();
         m_free_var_freeze.push_back(m_free_vars);
         m_free_vars.reset(); // resetting free_vars forces new variables to be assigned above new_v
@@ -3822,6 +3817,8 @@ namespace sat {
 
     void solver::move_to_front(bool_var b) {
         if (b >= num_vars())
+            return;
+        if (m_case_split_queue.empty())
             return;
         bool_var next = m_case_split_queue.min_var();
         auto next_act = m_activity[next];
@@ -4177,7 +4174,7 @@ namespace sat {
     lbool solver::find_mutexes(literal_vector const& lits, vector<literal_vector> & mutexes) {
         max_cliques<neg_literal> mc;
         m_user_bin_clauses.reset();
-        m_binary_clause_graph.reset();
+        // m_binary_clause_graph.reset();
         collect_bin_clauses(m_user_bin_clauses, true, false);
         hashtable<literal_pair, pair_hash<literal_hash, literal_hash>, default_eq<literal_pair> > seen_bc;
         for (auto const& b : m_user_bin_clauses) {
@@ -4192,20 +4189,22 @@ namespace sat {
         vector<unsigned_vector> _mutexes;
         literal_vector _lits(lits);
         if (m_ext) {
-            // m_ext->find_mutexes(_lits, mutexes);
+            m_ext->find_mutexes(_lits, mutexes);
         }
         unsigned_vector ps;
-        for (literal lit : _lits) {
+        for (literal lit : _lits) 
             ps.push_back(lit.index());
-        }
-        mc.cliques(ps, _mutexes);
+        mc.cliques2(ps, _mutexes);
+        vector<vector<literal_vector>> sorted;
         for (auto const& mux : _mutexes) {
             literal_vector clique;
-            for (auto const& idx : mux) {
+            sorted.reserve(mux.size() + 1);
+            for (auto const& idx : mux) 
                 clique.push_back(to_literal(idx));
-            }
-            mutexes.push_back(clique);
+            sorted[mux.size()].push_back(clique);
         }
+        for (unsigned i = sorted.size(); i-- > 0; ) 
+            mutexes.append(sorted[i]);
         return l_true;
     }
 

@@ -49,7 +49,9 @@ public:
 
     ~nnf_tactic() override {}
 
-    void updt_params(params_ref const & p) override { m_params = p; }
+    char const* name() const override { return "nnf"; }
+
+    void updt_params(params_ref const & p) override { m_params.append(p); }
 
     void collect_param_descrs(param_descrs & r) override { nnf::get_param_descrs(r); }
 

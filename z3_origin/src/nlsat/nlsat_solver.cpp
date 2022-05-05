@@ -1594,6 +1594,7 @@ namespace nlsat {
             return r;
         }
 
+
         lbool check() {
             TRACE("nlsat_smt2", display_smt2(tout););
             TRACE("nlsat_fd", tout << "is_full_dimensional: " << is_full_dimensional() << "\n";);
@@ -1618,7 +1619,14 @@ namespace nlsat {
                 heuristic_reorder();
                 reordered = true;
             }
-            TRACE("wzh", tout << "[dynamic] after reorder, show static order:\n";
+            TRACE("wzh", tout << "[debug] after reorder, show static order:\n";
+                for(var i = 0; i < num_vars(); i++){
+                    tout << "var: " << i << " ";
+                    m_display_var(tout, i);
+                    tout << std::endl;
+                }
+            );
+            TRACE("wzh", tout << "[debug] after debug order, show static order:\n";
                 for(var i = 0; i < num_vars(); i++){
                     tout << "var: " << i << " ";
                     m_display_var(tout, i);
@@ -1784,6 +1792,11 @@ namespace nlsat {
             TRACE("nlsat_resolve", tout << "b_lvl: " << b_lvl << ", is_marked(b): " << is_marked(b) << ", m_num_marks: " << m_num_marks << "\n";);
             if (!is_marked(b)) {
                 mark(b);
+                CTRACE("wzh", b_lvl == scope_lvl(), tout << "[debug] same level" << std::endl;);
+                TRACE("wzh", tout << "[debug] current m_xk: " << m_xk << " ";
+                    m_display_var(tout, m_xk);
+                    tout << std::endl;
+                );
                 if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
                     TRACE("nlsat_resolve", tout << "literal is in the same level and stage, increasing marks\n";);
                     m_num_marks++;
@@ -2040,14 +2053,18 @@ namespace nlsat {
                 }
 
                 // m_lemma is an implicating clause after backtracking current scope level.
-                if (found_decision)
+                if (found_decision){
+                    TRACE("wzh", tout << "[debug] found decision" << std::endl;);
                     break;
+                }
 
                 // If lemma only contains literals from previous stages, then we can stop.
                 // We make progress by returning to a previous stage with additional information (new lemma)
                 // that forces us to select a new partial interpretation
-                if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data()))
+                if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data())){
+                    TRACE("wzh", tout << "[debug] all literals from previous stages" << std::endl;);
                     break;
+                }
                 
                 // Conflict does not depend on the current decision, and it is still in the current stage.
                 // We should find
@@ -3740,6 +3757,4 @@ namespace nlsat {
     void solver::collect_statistics(statistics & st) {
         return m_imp->collect_statistics(st);
     }
-
-
 };

@@ -1004,7 +1004,7 @@ namespace nlsat {
                     break;
                 }
                 TRACE("nlsat_explain", tout << "project loop, processing var "; display_var(tout, x); tout << "\npolynomials\n";
-                    display(tout, ps); tout << "\n";);
+                      display(tout, ps); tout << "\n";);
                 add_lc(ps, x);
                 psc_discriminant(ps, x);
                 psc_resultant(ps, x);
@@ -1390,10 +1390,8 @@ namespace nlsat {
                 m_core2.append(num, ls);
                 var max = max_var(num, ls);
                 SASSERT(max != null_var);
-                TRACE("nlsat_explain", display(tout << "core before normalization\n", m_core2) << "\n";);
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
-                TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
                 simplify(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
                 main(m_core2.size(), m_core2.data());

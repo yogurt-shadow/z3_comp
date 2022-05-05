@@ -101,6 +101,11 @@ namespace euf {
     theory_var th_euf_solver::get_th_var(expr* e) const {
         return get_th_var(ctx.get_enode(e));
     }
+
+    theory_var th_euf_solver::get_representative(theory_var v) const {
+        euf::enode* r = var2enode(v)->get_root();
+        return get_th_var(r);
+    }
     
     void th_euf_solver::push_core() {
         m_var2enode_lim.push_back(m_var2enode.size());
@@ -127,6 +132,7 @@ namespace euf {
     bool th_euf_solver::add_unit(sat::literal lit) {
         bool was_true = is_true(lit);
         ctx.s().add_clause(1, &lit, mk_status());
+        ctx.add_root(lit);
         return !was_true;
     }
 
@@ -138,32 +144,27 @@ namespace euf {
         return is_new;
     }
 
-    bool th_euf_solver::add_clause(sat::literal a, sat::literal b) {
-        bool was_true = is_true(a, b);
+    bool th_euf_solver::add_clause(sat::literal a, sat::literal b) {      
         sat::literal lits[2] = { a, b };
-        ctx.s().add_clause(2, lits, mk_status());
-        return !was_true;
+        return add_clause(2, lits);
     }
 
-    bool th_euf_solver::add_clause(sat::literal a, sat::literal b, sat::literal c) {
-        bool was_true = is_true(a, b, c);
+    bool th_euf_solver::add_clause(sat::literal a, sat::literal b, sat::literal c) {      
         sat::literal lits[3] = { a, b, c };
-        ctx.s().add_clause(3, lits, mk_status());
-        return !was_true;
+        return add_clause(3, lits);
     }
 
     bool th_euf_solver::add_clause(sat::literal a, sat::literal b, sat::literal c, sat::literal d) {
-        bool was_true = is_true(a, b, c, d);
         sat::literal lits[4] = { a, b, c, d };
-        ctx.s().add_clause(4, lits, mk_status());
-        return !was_true;
+        return add_clause(4, lits);
     }
 
-    bool th_euf_solver::add_clause(sat::literal_vector const& lits) {
+    bool th_euf_solver::add_clause(unsigned n, sat::literal* lits) {
         bool was_true = false;
-        for (auto lit : lits)
-            was_true |= is_true(lit);
-        s().add_clause(lits.size(), lits.data(), mk_status());
+        for (unsigned i = 0; i < n; ++i)       
+            was_true |= is_true(lits[i]);
+        ctx.add_root(n, lits);
+        s().add_clause(n, lits, mk_status());
         return !was_true;
     }
 
@@ -213,12 +214,7 @@ namespace euf {
     }
 
     euf::enode* th_euf_solver::e_internalize(expr* e) {
-        euf::enode* n = expr2enode(e);
-        if (!n) {
-            ctx.internalize(e, m_is_redundant);
-            n = expr2enode(e);
-        }
-        return n;
+        return ctx.e_internalize(e);
     }
 
     unsigned th_euf_solver::random() {

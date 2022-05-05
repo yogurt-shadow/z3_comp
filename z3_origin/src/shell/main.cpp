@@ -39,7 +39,10 @@ Revision History:
 #include "util/file_path.h"
 #include "shell/lp_frontend.h"
 #include "shell/drat_frontend.h"
+
+// wzh
 #include <vector>
+// hzw
 
 #if defined( _WINDOWS ) && defined( __MINGW32__ ) && ( defined( __GNUG__ ) || defined( __clang__ ) )
 #include <crtdbg.h>
@@ -318,6 +321,7 @@ static void parse_cmd_line_args(std::string& input_file, int argc, char ** argv)
         set_timeout(timeout * 1000);
 }
 
+// wzh
 std::vector<char *> v_trace_tag;
 
 void parse_trace_tags_text(){
@@ -343,6 +347,8 @@ void clear_trace_tag_vector(){
         delete[] ptr;
     }
 }
+// hzw
+
 
 int STD_CALL main(int argc, char ** argv) {
      try {
@@ -432,7 +438,9 @@ int STD_CALL main(int argc, char ** argv) {
 #ifdef _WINDOWS
         _CrtDumpMemoryLeaks();
 #endif
+        // wzh
         clear_trace_tag_vector();
+        // hzw
         return return_value;
     }
     catch (z3_exception & ex) {

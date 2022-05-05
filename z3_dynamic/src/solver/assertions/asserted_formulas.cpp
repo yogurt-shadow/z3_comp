@@ -49,6 +49,7 @@ asserted_formulas::asserted_formulas(ast_manager & m, smt_params & sp, params_re
     m_refine_inj_axiom(*this),
     m_max_bv_sharing_fn(*this),
     m_elim_term_ite(*this),
+    m_qe_lite(*this),
     m_pull_nested_quantifiers(*this),
     m_elim_bvs_from_quantifiers(*this),
     m_cheap_quant_fourier_motzkin(*this),
@@ -71,12 +72,12 @@ asserted_formulas::asserted_formulas(ast_manager & m, smt_params & sp, params_re
 
 void asserted_formulas::setup() {
     switch (m_smt_params.m_lift_ite) {
-    case LI_FULL:
-        m_smt_params.m_ng_lift_ite = LI_NONE;
+    case lift_ite_kind::LI_FULL:
+        m_smt_params.m_ng_lift_ite = lift_ite_kind::LI_NONE;
         break;
-    case LI_CONSERVATIVE:
-        if (m_smt_params.m_ng_lift_ite == LI_CONSERVATIVE)
-            m_smt_params.m_ng_lift_ite = LI_NONE;
+    case lift_ite_kind::LI_CONSERVATIVE:
+        if (m_smt_params.m_ng_lift_ite == lift_ite_kind::LI_CONSERVATIVE)
+            m_smt_params.m_ng_lift_ite = lift_ite_kind::LI_NONE;
         break;
     default:
         break;
@@ -192,7 +193,7 @@ void asserted_formulas::push_scope_core() {
     reduce();
     commit();
     SASSERT(inconsistent() || m_qhead == m_formulas.size() || m.limit().is_canceled());
-    TRACE("asserted_formulas_scopes", tout << "before push: " << m_scopes.size() << "\n";);
+    TRACE("asserted_formulas_scopes", tout << "before push: " << m_scopes.size() << "\n");
     m_scoped_substitution.push();
     m_scopes.push_back(scope());
     scope & s = m_scopes.back();
@@ -204,7 +205,7 @@ void asserted_formulas::push_scope_core() {
     m_bv_sharing.push_scope();
     m_macro_manager.push_scope();
     commit();
-    TRACE("asserted_formulas_scopes", tout << "after push: " << m_scopes.size() << "\n";);
+    TRACE("asserted_formulas_scopes", tout << "after push: " << m_scopes.size() << "\n");
 }
 
 void asserted_formulas::force_push() {
@@ -213,13 +214,13 @@ void asserted_formulas::force_push() {
 }
 
 void asserted_formulas::pop_scope(unsigned num_scopes) {
-    if (m_lazy_scopes > 0) {
-        unsigned n = std::min(num_scopes, m_lazy_scopes);
-        m_lazy_scopes -= n;
-        num_scopes -= n;
-        if (num_scopes == 0)
-            return;
+    if (num_scopes <= m_lazy_scopes) {
+        m_lazy_scopes -= num_scopes;
+        return;
     }
+    num_scopes -= m_lazy_scopes;
+    m_lazy_scopes = 0;
+    
     TRACE("asserted_formulas_scopes", tout << "before pop " << num_scopes << " of " << m_scopes.size() << "\n";);
     m_bv_sharing.pop_scope(num_scopes);
     m_macro_manager.pop_scope(num_scopes);
@@ -281,10 +282,11 @@ void asserted_formulas::reduce() {
     if (!invoke(m_reduce_asserted_formulas)) return;
     if (!invoke(m_pull_nested_quantifiers)) return;
     if (!invoke(m_lift_ite)) return;
-    m_lift_ite.m_functor.set_conservative(m_smt_params.m_lift_ite == LI_CONSERVATIVE);
-    m_ng_lift_ite.m_functor.set_conservative(m_smt_params.m_ng_lift_ite == LI_CONSERVATIVE);
+    m_lift_ite.m_functor.set_conservative(m_smt_params.m_lift_ite == lift_ite_kind::LI_CONSERVATIVE);
+    m_ng_lift_ite.m_functor.set_conservative(m_smt_params.m_ng_lift_ite == lift_ite_kind::LI_CONSERVATIVE);
     if (!invoke(m_ng_lift_ite)) return;
     if (!invoke(m_elim_term_ite)) return;
+    if (!invoke(m_qe_lite)) return;
     if (!invoke(m_refine_inj_axiom)) return;
     if (!invoke(m_distribute_forall)) return;
     if (!invoke(m_find_macros)) return;
@@ -424,7 +426,8 @@ void asserted_formulas::apply_quasi_macros() {
     TRACE("before_quasi_macros", display(tout););
     vector<justified_expr> new_fmls;
     quasi_macros proc(m, m_macro_manager);
-    while (proc(m_formulas.size() - m_qhead,
+    while (m_qhead == 0 && 
+           proc(m_formulas.size() - m_qhead,
                 m_formulas.data() + m_qhead,
                 new_fmls)) {
         swap_asserted_formulas(new_fmls);
@@ -531,14 +534,14 @@ void asserted_formulas::propagate_values() {
     flush_cache();
 
     unsigned num_prop = 0;
-    unsigned delta_prop = m_formulas.size();
-    while (!inconsistent() && m_formulas.size()/20 < delta_prop) {
+    unsigned sz = m_formulas.size();
+    unsigned delta_prop = sz;
+    while (!inconsistent() && sz/20 < delta_prop) {
         m_expr2depth.reset();
         m_scoped_substitution.push();
         unsigned prop = num_prop;
         TRACE("propagate_values", display(tout << "before:\n"););
         unsigned i  = m_qhead;
-        unsigned sz = m_formulas.size();
         for (; i < sz; i++) {
             prop += propagate_values(i);
         }
@@ -557,6 +560,9 @@ void asserted_formulas::propagate_values() {
         TRACE("propagate_values", tout << "after:\n"; display(tout););
         delta_prop = prop - num_prop;
         num_prop = prop;
+        if (sz <= m_formulas.size())
+            break;
+        sz = m_formulas.size();
     }
     TRACE("asserted_formulas", tout << num_prop << "\n";);
     if (num_prop > 0)

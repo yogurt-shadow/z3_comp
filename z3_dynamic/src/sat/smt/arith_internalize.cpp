@@ -42,6 +42,7 @@ namespace arith {
     void solver::init_internalize() {
         force_push();
         // initialize 0, 1 variables:
+        
         if (!m_internalize_initialized) {
             get_one(true);
             get_one(false);
@@ -84,7 +85,7 @@ namespace arith {
             m_nla->settings().grobner_number_of_conflicts_to_report() = prms.arith_nl_grobner_cnfl_to_report();
             m_nla->settings().grobner_quota() = prms.arith_nl_gr_q();
             m_nla->settings().grobner_frequency() = prms.arith_nl_grobner_frequency();
-            m_nla->settings().expensive_patching() = prms.arith_nl_expp();
+            m_nla->settings().expensive_patching() = false;
         }
     }
 
@@ -236,9 +237,10 @@ namespace arith {
                 if (!is_first) {
                     // skip recursive internalization
                 }
-                else if (a.is_to_int(n, n1)) {
-                    mk_to_int_axiom(t);
-                }
+                else if (a.is_to_int(n, n1)) 
+                    mk_to_int_axiom(t);                
+                else if (a.is_abs(n)) 
+                    mk_abs_axiom(t);                
                 else if (a.is_idiv(n, n1, n2)) {
                     if (!a.is_numeral(n2, r) || r.is_zero()) found_underspecified(n);
                     m_idiv_terms.push_back(n);
@@ -267,17 +269,16 @@ namespace arith {
                 }
                 else if (!a.is_div0(n) && !a.is_mod0(n) && !a.is_idiv0(n) && !a.is_rem0(n) && !a.is_power0(n)) {
                     found_unsupported(n);
+                    ensure_arg_vars(to_app(n));
                 }
                 else {
-                    // no-op
+                    ensure_arg_vars(to_app(n));
                 }
             }
             else {
                 if (is_app(n)) {
                     internalize_args(to_app(n));
-                    for (expr* arg : *to_app(n)) 
-                        if (a.is_arith_expr(arg))
-                            internalize_term(arg);
+                    ensure_arg_vars(to_app(n));
                 }
                 theory_var v = mk_evar(n);
                 coeffs[vars.size()] = coeffs[index];
@@ -307,7 +308,6 @@ namespace arith {
 
     bool solver::internalize_atom(expr* atom) {
         TRACE("arith", tout << mk_pp(atom, m) << "\n";);
-        SASSERT(!ctx.get_enode(atom));
         expr* n1, *n2;
         rational r;
         lp_api::bound_kind k;
@@ -335,21 +335,18 @@ namespace arith {
         }
         else if (a.is_le(atom, n1, n2)) {
             expr_ref n3(a.mk_sub(n1, n2), m);
-            rewrite(n3);
             v = internalize_def(n3);
             k = lp_api::upper_t;
             r = 0;
         }
         else if (a.is_ge(atom, n1, n2)) {
             expr_ref n3(a.mk_sub(n1, n2), m);
-            rewrite(n3);
             v = internalize_def(n3);
             k = lp_api::lower_t;
             r = 0;
         }
         else if (a.is_lt(atom, n1, n2)) {
             expr_ref n3(a.mk_sub(n1, n2), m);
-            rewrite(n3);
             v = internalize_def(n3);
             k = lp_api::lower_t;
             r = 0;
@@ -357,7 +354,6 @@ namespace arith {
         }
         else if (a.is_gt(atom, n1, n2)) {
             expr_ref n3(a.mk_sub(n1, n2), m);
-            rewrite(n3);
             v = internalize_def(n3);
             k = lp_api::upper_t;
             r = 0;
@@ -429,6 +425,12 @@ namespace arith {
             e_internalize(arg);
     }
 
+    void solver::ensure_arg_vars(app* n) {
+        for (expr* arg : *to_app(n))
+            if (a.is_real(arg) || a.is_int(arg))
+                internalize_term(arg);
+    }
+
     theory_var solver::internalize_power(app* t, app* n, unsigned p) {
         internalize_args(t, true);
         bool _has_var = has_var(t);
@@ -484,10 +486,10 @@ namespace arith {
             return st.vars()[0];
         }
         else if (is_one(st) && a.is_numeral(term)) {
-            return get_one(a.is_int(term));
+            return lp().local_to_external(get_one(a.is_int(term)));
         }
         else if (is_zero(st) && a.is_numeral(term)) {
-            return get_zero(a.is_int(term));
+            return lp().local_to_external(get_zero(a.is_int(term)));
         }
         else {
             init_left_side(st);
@@ -549,11 +551,13 @@ namespace arith {
         }
         m_left_side.clear();
         // reset the coefficients after they have been used.
-        for (unsigned i = 0; i < vars.size(); ++i) {
-            theory_var var = vars[i];
+        for (theory_var var : vars) {
             rational const& r = m_columns[var];
             if (!r.is_zero()) {
-                m_left_side.push_back(std::make_pair(r, register_theory_var_in_lar_solver(var)));
+                auto vi = register_theory_var_in_lar_solver(var);
+                if (lp::tv::is_term(vi))
+                    vi = lp().map_term_index_to_column_index(vi);
+                m_left_side.push_back(std::make_pair(r, vi));
                 m_columns[var].reset();
             }
         }

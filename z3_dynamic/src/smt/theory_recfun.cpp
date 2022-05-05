@@ -55,7 +55,7 @@ namespace smt {
             ctx.internalize(arg, false);
         }
         if (!ctx.e_internalized(atom)) {
-            ctx.mk_enode(atom, false, true, false);
+            ctx.mk_enode(atom, false, true, true);
         }
         if (!ctx.b_internalized(atom)) {
             bool_var v = ctx.mk_bool_var(atom);
@@ -214,7 +214,7 @@ namespace smt {
     void theory_recfun::assign_eh(bool_var v, bool is_true) {
         expr* e = ctx.bool_var2expr(v);
         if (is_true && u().is_case_pred(e)) {
-            TRACEFN("assign_case_pred_true " << mk_pp(e, m));
+            TRACEFN("assign_case_pred_true " << v << " " << mk_pp(e, m));
             // body-expand
             push_body_expand(e);
         }
@@ -246,17 +246,23 @@ namespace smt {
 
     literal theory_recfun::mk_eq_lit(expr* l, expr* r) {
         literal lit;
-        if (m.is_true(r) || m.is_false(r)) {
-            std::swap(l, r);
-        }
-        if (m.is_true(l)) {
-            lit = mk_literal(r);
-        }
-        else if (m.is_false(l)) {
-            lit = ~mk_literal(r);
+        if (has_quantifiers(l) || has_quantifiers(r)) {
+            expr_ref eq1(m.mk_eq(l, r), m);
+            expr_ref fn(m.mk_fresh_const("rec-eq", m.mk_bool_sort()), m);
+            expr_ref eq(m.mk_eq(fn, eq1), m);
+            ctx.assert_expr(eq);
+            ctx.internalize_assertions();
+            lit = mk_literal(fn);
         }
         else {
-            lit = mk_eq(l, r, false);        
+            if (m.is_true(r) || m.is_false(r))
+                std::swap(l, r);
+            if (m.is_true(l))
+                lit = mk_literal(r);
+            else if (m.is_false(l))
+                lit = ~mk_literal(r);
+            else
+                lit = mk_eq(l, r, false);
         }
         ctx.mark_as_relevant(lit);
         return lit;
@@ -282,14 +288,12 @@ namespace smt {
         auto & vars = e.m_def->get_vars();
         expr_ref lhs(e.m_lhs, m);
         unsigned depth = get_depth(e.m_lhs);
-        expr_ref rhs(apply_args(depth, vars, e.m_args, e.m_def->get_rhs()), m);	
+        expr_ref rhs(apply_args(depth, vars, e.m_args, e.m_def->get_rhs()), m);
         literal lit = mk_eq_lit(lhs, rhs);
         std::function<literal(void)> fn = [&]() { return lit; };
         scoped_trace_stream _tr(*this, fn);
         ctx.mk_th_axiom(get_id(), 1, &lit);
         TRACEFN("macro expansion yields " << pp_lit(ctx, lit));
-	    if (has_quantifiers(rhs))
-	        throw default_exception("quantified formulas in recursive functions are not supported");
     }
 
     /**
@@ -339,6 +343,7 @@ namespace smt {
             activate_guard(pred_applied, guards);
         }
 
+        TRACEFN("assert core " << preds);
         // the disjunction of branches is asserted
         // to close the available cases. 
 
@@ -377,6 +382,13 @@ namespace smt {
         unsigned depth = get_depth(e.m_pred);
         expr_ref lhs(u().mk_fun_defined(d, args), m);
         expr_ref rhs = apply_args(depth, vars, args, e.m_cdef->get_rhs());
+        if (has_quantifiers(rhs)) {
+            expr_ref fn(m.mk_fresh_const("rec-eq", m.mk_bool_sort()), m);
+            expr_ref eq(m.mk_eq(fn, rhs), m);
+            ctx.assert_expr(eq);
+            ctx.internalize_assertions();
+            rhs = fn;
+        }
         literal_vector clause;
         for (auto & g : e.m_cdef->get_guards()) {
             expr_ref guard = apply_args(depth, vars, args, g);
@@ -394,8 +406,6 @@ namespace smt {
         std::function<literal_vector(void)> fn = [&]() { return clause; };
         scoped_trace_stream _tr(*this, fn);
         ctx.mk_th_axiom(get_id(), clause);
-        if (has_quantifiers(rhs))
-            throw default_exception("quantified formulas in recursive functions are not supported");
     }
     
     final_check_status theory_recfun::final_check_eh() {

@@ -58,6 +58,15 @@ namespace bv {
         m_bb.set_flat(false);
     }
 
+    bool solver::is_fixed(euf::theory_var v, expr_ref& val, sat::literal_vector& lits) {
+        numeral n;
+        if (!get_fixed_value(v, n))
+            return false;
+        val = bv.mk_numeral(n, m_bits[v].size());
+        lits.append(m_bits[v]);
+        return true;
+    }
+
     void solver::fixed_var_eh(theory_var v1) {
         numeral val1, val2;
         VERIFY(get_fixed_value(v1, val1));
@@ -158,7 +167,7 @@ namespace bv {
         SASSERT(m_bits[v1][idx] == ~m_bits[v2][idx]);
         TRACE("bv", tout << "found new diseq axiom\n" << pp(v1) << pp(v2););
         m_stats.m_num_diseq_static++;
-        expr_ref eq = mk_var_eq(v1, v2);
+        expr_ref eq(m.mk_eq(var2expr(v1), var2expr(v2)), m);
         add_unit(~ctx.internalize(eq, false, false, m_is_redundant));
     }
 
@@ -478,6 +487,9 @@ namespace bv {
             if (!assign_bit(bit2, v1, v2, idx, bit1, false))
                 break;
         }
+        if (s().value(m_bits[v1][m_wpos[v1]]) != l_undef)
+            find_wpos(v1);
+
         return num_assigned > 0;
     }
 
@@ -670,25 +682,33 @@ namespace bv {
         for (theory_var i = 0; i < static_cast<theory_var>(get_num_vars()); ++i)
             if (find(i) != i)
                 result->m_find.set_root(i, find(i));
-        result->m_prop_queue.append(m_prop_queue);
-        for (unsigned i = 0; i < m_bool_var2atom.size(); ++i) {
-            atom* a = m_bool_var2atom[i];
-            if (!a)
-                continue;
 
-            atom* new_a = new (result->get_region()) atom(i);
-            result->m_bool_var2atom.setx(i, new_a, nullptr);
-            for (auto vp : *a)
-                new_a->m_occs = new (result->get_region()) var_pos_occ(vp.first, vp.second, new_a->m_occs);
-            for (eq_occurs const& occ : a->eqs()) {
+        auto clone_atom = [&](atom const& a) {
+            atom* new_a = new (result->get_region()) atom(a.m_bv);
+            result->m_bool_var2atom.setx(a.m_bv, new_a, nullptr);
+            for (auto [v, p] : a)
+                new_a->m_occs = new (result->get_region()) var_pos_occ(v, p, new_a->m_occs);
+            for (eq_occurs const& occ : a.eqs()) {
                 expr* e = occ.m_node->get_expr();
                 expr_ref e2(tr(e), tr.to());
                 euf::enode* n = ctx.get_enode(e2);
+                SASSERT(tr.to().contains(e2));
                 new_a->m_eqs = new (result->get_region()) eq_occurs(occ.m_bv1, occ.m_bv2, occ.m_idx, occ.m_v1, occ.m_v2, occ.m_literal, n, new_a->m_eqs);
             }
-            new_a->m_def = a->m_def;
-            new_a->m_var = a->m_var;
-            // validate_atoms();
+            new_a->m_def = a.m_def;
+            new_a->m_var = a.m_var;           
+        };
+
+        for (atom* a : m_bool_var2atom) 
+            if (a)
+                clone_atom(*a);
+        // validate_atoms();        
+
+        for (auto p : m_prop_queue) {
+            propagation_item q = p;
+            if (p.is_atom())
+                q = propagation_item(result->get_bv2a(p.m_atom->m_bv));
+            result->m_prop_queue.push_back(q);
         }
         return result;
     }
@@ -729,6 +749,7 @@ namespace bv {
     void solver::merge_eh(theory_var r1, theory_var r2, theory_var v1, theory_var v2) {
 
         TRACE("bv", tout << "merging: v" << v1 << " #" << var2enode(v1)->get_expr_id() << " v" << v2 << " #" << var2enode(v2)->get_expr_id() << "\n";);
+
         if (!merge_zero_one_bits(r1, r2)) {
             TRACE("bv", tout << "conflict detected\n";);
             return; // conflict was detected

@@ -25,10 +25,11 @@ Author:
 #include "sat/sat_extension.h"
 #include "sat/smt/atom2bool_var.h"
 #include "sat/smt/sat_th.h"
-#include "sat/smt/sat_dual_solver.h"
 #include "sat/smt/euf_ackerman.h"
 #include "sat/smt/user_solver.h"
+#include "sat/smt/euf_relevancy.h"
 #include "smt/params/smt_params.h"
+
 
 namespace euf {
     typedef sat::literal literal;
@@ -72,6 +73,7 @@ namespace euf {
         };
         struct scope {
             unsigned m_var_lim;
+            scope(unsigned l) : m_var_lim(l) {}
         };
 
 
@@ -90,33 +92,33 @@ namespace euf {
         std::function<::solver*(void)>   m_mk_solver;
         ast_manager&                     m;
         sat::sat_internalizer& si;
+        relevancy              m_relevancy;
         smt_params             m_config;
         euf::egraph            m_egraph;
         trail_stack            m_trail;
         stats                  m_stats;
         th_rewriter            m_rewriter;
         func_decl_ref_vector   m_unhandled_functions;
-        sat::lookahead*        m_lookahead{ nullptr };
+        sat::lookahead*        m_lookahead = nullptr;
         ast_manager*           m_to_m;
         sat::sat_internalizer* m_to_si;
-        scoped_ptr<euf::ackerman>    m_ackerman;
-        scoped_ptr<sat::dual_solver> m_dual_solver;
-        user::solver*          m_user_propagator{ nullptr };
-        th_solver*             m_qsolver { nullptr };
-        unsigned               m_generation { 0 };
+        scoped_ptr<euf::ackerman>     m_ackerman;
+        user_solver::solver*          m_user_propagator = nullptr;
+        th_solver*             m_qsolver = nullptr;
+        unsigned               m_generation = 0;
         mutable ptr_vector<expr> m_todo;
 
         ptr_vector<expr>                                m_bool_var2expr;
         ptr_vector<size_t>                              m_explain;
-        unsigned                                        m_num_scopes{ 0 };
+        unsigned                                        m_num_scopes = 0;
         unsigned_vector                                 m_var_trail;
         svector<scope>                                  m_scopes;
         scoped_ptr_vector<th_solver>                    m_solvers;
         ptr_vector<th_solver>                           m_id2solver;
 
-        constraint* m_conflict{ nullptr };
-        constraint* m_eq{ nullptr };
-        constraint* m_lit{ nullptr };
+        constraint* m_conflict = nullptr;
+        constraint* m_eq = nullptr;
+        constraint* m_lit = nullptr;
 
         // internalization
         bool visit(expr* e) override;
@@ -127,6 +129,7 @@ namespace euf {
         void add_not_distinct_axiom(app* e, euf::enode* const* args);
         void axiomatize_basic(enode* n);
         bool internalize_root(app* e, bool sign, ptr_vector<enode> const& args);
+        void ensure_merged_tf(euf::enode* n);
         euf::enode* mk_true();
         euf::enode* mk_false();
 
@@ -134,8 +137,9 @@ namespace euf {
         typedef std::tuple<expr_ref, unsigned, sat::bool_var> reinit_t;
         vector<reinit_t>    m_reinit;
 
-        void start_reinit(unsigned num_scopes);
+        void start_reinit(unsigned num_scopes);        
         void finish_reinit();
+        void relevancy_reinit(expr* e);
 
         // extensions
         th_solver* get_solver(family_id fid, func_decl* f);
@@ -150,12 +154,14 @@ namespace euf {
         // model building
         expr_ref_vector m_values;
         obj_map<expr, enode*> m_values2root;        
+        model_ref m_qmodel;
         bool include_func_interp(func_decl* f);
         void register_macros(model& mdl);
         void dependencies2values(user_sort& us, deps_t& deps, model_ref& mdl);
         void collect_dependencies(user_sort& us, deps_t& deps);
         void values2model(deps_t const& deps, model_ref& mdl);
         void validate_model(model& mdl);
+        void display_validation_failure(std::ostream& out, model& mdl, enode* n);
 
         // solving
         void propagate_literals();
@@ -163,6 +169,7 @@ namespace euf {
         bool is_self_propagated(th_eq const& e);
         void get_antecedents(literal l, constraint& j, literal_vector& r, bool probing);
         void new_diseq(enode* a, enode* b, literal lit);
+        bool merge_shared_bools();
 
         // proofs
         void log_antecedents(std::ostream& out, literal l, literal_vector const& r);
@@ -177,15 +184,17 @@ namespace euf {
         void init_drat();
 
         // relevancy
-        bool_vector m_relevant_expr_ids;
-        void ensure_dual_solver();
-        bool init_relevancy();
-
-
+        //bool_vector m_relevant_expr_ids;
+        //bool_vector m_relevant_visited;
+        //ptr_vector<expr> m_relevant_todo;
+        //void init_relevant_expr_ids();
+        //void push_relevant(sat::bool_var v);
+        bool is_propagated(sat::literal lit);
         // invariant
         void check_eqc_bool_assignment() const;
         void check_missing_bool_enode_propagation() const;
         void check_missing_eq_propagation() const;
+        
 
         // diagnosis
         std::ostream& display_justification_ptr(std::ostream& out, size_t* j) const;
@@ -244,6 +253,10 @@ namespace euf {
         sat::sat_internalizer& get_si() { return si; }
         ast_manager& get_manager() { return m; }
         enode* get_enode(expr* e) const { return m_egraph.find(e); }
+        enode* bool_var2enode(sat::bool_var b) const {
+            expr* e = m_bool_var2expr.get(b, nullptr);
+            return e ? get_enode(e) : nullptr;
+        }
         sat::literal expr2literal(expr* e) const { return enode2literal(get_enode(e)); }
         sat::literal enode2literal(enode* n) const { return sat::literal(n->bool_var(), false); }
         lbool value(enode* n) const { return s().value(enode2literal(n)); }
@@ -275,7 +288,7 @@ namespace euf {
         bool propagated(literal l, ext_constraint_idx idx) override;
         bool unit_propagate() override;
         bool should_research(sat::literal_vector const& core) override;
-        void add_assumptions() override;
+        void add_assumptions(sat::literal_set& assumptions) override;
         bool tracking_assumptions() override;
 
         void propagate(literal lit, ext_justification_idx idx);
@@ -284,6 +297,7 @@ namespace euf {
 
         void propagate(literal lit, th_explain* p) { propagate(lit, p->to_index()); }
         bool propagate(enode* a, enode* b, th_explain* p) { return propagate(a, b, p->to_index()); }
+        size_t* to_justification(sat::literal l) { return to_ptr(l); }
         void set_conflict(th_explain* p) { set_conflict(p->to_index()); }
 
         bool set_root(literal l, literal r) override;
@@ -292,7 +306,9 @@ namespace euf {
         void get_antecedents(literal l, ext_justification_idx idx, literal_vector& r, bool probing) override;
         void get_antecedents(literal l, th_explain& jst, literal_vector& r, bool probing);
         void add_antecedent(enode* a, enode* b);
-        void add_diseq_antecedent(enode* a, enode* b);
+        void add_diseq_antecedent(ptr_vector<size_t>& ex, enode* a, enode* b);
+        void add_explain(size_t* p) { m_explain.push_back(p); }
+        void reset_explain() { m_explain.reset(); }
         void set_eliminated(bool_var v) override;
         void asserted(literal l) override;
         sat::check_result check() override;
@@ -308,7 +324,7 @@ namespace euf {
         std::ostream& display(std::ostream& out) const override;
         std::ostream& display_justification(std::ostream& out, ext_justification_idx idx) const override;
         std::ostream& display_constraint(std::ostream& out, ext_constraint_idx idx) const override;
-        euf::egraph::b_pp bpp(enode* n) { return m_egraph.bpp(n); }
+        euf::egraph::b_pp bpp(enode* n) const { return m_egraph.bpp(n); }
         clause_pp pp(literal_vector const& lits) { return clause_pp(*this, lits); }
         void collect_statistics(statistics& st) const override;
         extension* copy(sat::solver* s) override;
@@ -344,9 +360,10 @@ namespace euf {
         void attach_node(euf::enode* n);
         expr_ref mk_eq(expr* e1, expr* e2);
         expr_ref mk_eq(euf::enode* n1, euf::enode* n2) { return mk_eq(n1->get_expr(), n2->get_expr()); }
-        euf::enode* mk_enode(expr* e, unsigned n, enode* const* args) { return m_egraph.mk(e, m_generation, n, args); }
+        euf::enode* e_internalize(expr* e);
+        euf::enode* mk_enode(expr* e, unsigned n, enode* const* args);
         expr* bool_var2expr(sat::bool_var v) const { return m_bool_var2expr.get(v, nullptr); }
-        expr_ref literal2expr(sat::literal lit) const { expr* e = bool_var2expr(lit.var()); return lit.sign() ? expr_ref(m.mk_not(e), m) : expr_ref(e, m); }
+        expr_ref literal2expr(sat::literal lit) const { expr* e = bool_var2expr(lit.var()); return (e && lit.sign()) ? expr_ref(m.mk_not(e), m) : expr_ref(e, m); }
         unsigned generation() const { return m_generation; }
 
         sat::literal attach_lit(sat::literal lit, expr* e);
@@ -354,21 +371,32 @@ namespace euf {
         th_rewriter& get_rewriter() { return m_rewriter; }
         void rewrite(expr_ref& e) { m_rewriter(e); }
         bool is_shared(euf::enode* n) const;
+        bool enable_ackerman_axioms(expr* n) const;
+        bool is_fixed(euf::enode* n, expr_ref& val, sat::literal_vector& explain);
 
         // relevancy
-        bool relevancy_enabled() const { return get_config().m_relevancy_lvl > 0; }
-        void add_root(unsigned n, sat::literal const* lits);
+
+        bool relevancy_enabled() const { return m_relevancy.enabled(); }
+        void disable_relevancy(expr* e) { IF_VERBOSE(0, verbose_stream() << "disabling relevancy " << mk_pp(e, m) << "\n"); m_relevancy.set_enabled(false); }
+        void add_root(unsigned n, sat::literal const* lits) { m_relevancy.add_root(n, lits); }
         void add_root(sat::literal_vector const& lits) { add_root(lits.size(), lits.data()); }
         void add_root(sat::literal lit) { add_root(1, &lit); }
-        void add_root(sat::literal a, sat::literal b) { sat::literal lits[2] = {a, b}; add_root(2, lits); }
-        void add_aux(unsigned n, sat::literal const* lits);
+        void add_root(sat::literal lit1, sat::literal lit2) { sat::literal lits[2] = { lit1, lit2, }; add_root(2, lits); }
+        void add_aux(sat::literal_vector const& lits) { add_aux(lits.size(), lits.data()); }
+        void add_aux(unsigned n, sat::literal const* lits) { m_relevancy.add_def(n, lits); }
+        void add_aux(sat::literal a) { sat::literal lits[1] = { a }; add_aux(1, lits); }
         void add_aux(sat::literal a, sat::literal b) { sat::literal lits[2] = {a, b}; add_aux(2, lits); } 
-        void track_relevancy(sat::bool_var v);
-        bool is_relevant(expr* e) const;
-        bool is_relevant(enode* n) const;
+        void add_aux(sat::literal a, sat::literal b, sat::literal c) { sat::literal lits[3] = { a, b, c }; add_aux(3, lits); }
+        void mark_relevant(sat::literal lit) { m_relevancy.mark_relevant(lit); }
+        bool is_relevant(enode* n) const { return m_relevancy.is_relevant(n); }
+        bool is_relevant(bool_var v) const;
+        bool is_relevant(sat::literal lit) const { return is_relevant(lit.var()); }
+        void relevant_eh(euf::enode* n);
 
+        relevancy& get_relevancy() { return m_relevancy; }
 
         // model construction
+        void save_model(model_ref& mdl);
         void update_model(model_ref& mdl);
         obj_map<expr, enode*> const& values2root();
         void model_updated(model_ref& mdl);
@@ -380,33 +408,37 @@ namespace euf {
         // user propagator
         void user_propagate_init(
             void* ctx,
-            ::solver::push_eh_t& push_eh,
-            ::solver::pop_eh_t& pop_eh,
-            ::solver::fresh_eh_t& fresh_eh);
+            user_propagator::push_eh_t& push_eh,
+            user_propagator::pop_eh_t& pop_eh,
+            user_propagator::fresh_eh_t& fresh_eh);
         bool watches_fixed(enode* n) const;
         void assign_fixed(enode* n, expr* val, unsigned sz, literal const* explain);
         void assign_fixed(enode* n, expr* val, literal_vector const& explain) { assign_fixed(n, val, explain.size(), explain.data()); }
         void assign_fixed(enode* n, expr* val, literal explain) { assign_fixed(n, val, 1, &explain); }
 
-        void user_propagate_register_final(::solver::final_eh_t& final_eh) {
+        void user_propagate_register_final(user_propagator::final_eh_t& final_eh) {
             check_for_user_propagator();
             m_user_propagator->register_final(final_eh);
         }
-        void user_propagate_register_fixed(::solver::fixed_eh_t& fixed_eh) {
+        void user_propagate_register_fixed(user_propagator::fixed_eh_t& fixed_eh) {
             check_for_user_propagator();
             m_user_propagator->register_fixed(fixed_eh);
         }
-        void user_propagate_register_eq(::solver::eq_eh_t& eq_eh) {
+        void user_propagate_register_eq(user_propagator::eq_eh_t& eq_eh) {
             check_for_user_propagator();
             m_user_propagator->register_eq(eq_eh);
         }
-        void user_propagate_register_diseq(::solver::eq_eh_t& diseq_eh) {
+        void user_propagate_register_diseq(user_propagator::eq_eh_t& diseq_eh) {
             check_for_user_propagator();
             m_user_propagator->register_diseq(diseq_eh);
         }
-        unsigned user_propagate_register(expr* e) {
+        void user_propagate_register_created(user_propagator::created_eh_t& ceh) {
             check_for_user_propagator();
-            return m_user_propagator->add_expr(e);
+            m_user_propagator->register_created(ceh);
+        }
+        void user_propagate_register_expr(expr* e) {
+            check_for_user_propagator();
+            m_user_propagator->add_expr(e);
         }
 
         // solver factory

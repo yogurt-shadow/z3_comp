@@ -124,7 +124,7 @@ namespace {
         smt_params m_smt_params_save;
 
         void push_params() override {
-            m_params_save = params_ref();
+            m_params_save.reset();           
             m_params_save.copy(solver::get_params());
             m_smt_params_save = m_smt_params;
         }
@@ -200,7 +200,6 @@ namespace {
             return m_context.check(num_assumptions, assumptions);
         }
 
-
         lbool check_sat_cc_core(expr_ref_vector const& cube, vector<expr_ref_vector> const& clauses) override {
             return m_context.check(cube, clauses);
         }
@@ -209,36 +208,44 @@ namespace {
             m_context.get_levels(vars, depth);
         }
 
-        expr_ref_vector get_trail() override {
-            return m_context.get_trail();
+        expr_ref_vector get_trail(unsigned max_level) override {
+            return m_context.get_trail(max_level);
         }
 
         void user_propagate_init(
             void*                ctx, 
-            solver::push_eh_t&   push_eh,
-            solver::pop_eh_t&    pop_eh,
-            solver::fresh_eh_t&  fresh_eh) override {
+            user_propagator::push_eh_t&   push_eh,
+            user_propagator::pop_eh_t&    pop_eh,
+            user_propagator::fresh_eh_t&  fresh_eh) override {
             m_context.user_propagate_init(ctx, push_eh, pop_eh, fresh_eh);
         }
         
-        void user_propagate_register_fixed(solver::fixed_eh_t& fixed_eh) override {
+        void user_propagate_register_fixed(user_propagator::fixed_eh_t& fixed_eh) override {
             m_context.user_propagate_register_fixed(fixed_eh);
         }
 
-        void user_propagate_register_final(solver::final_eh_t& final_eh) override {
+        void user_propagate_register_final(user_propagator::final_eh_t& final_eh) override {
             m_context.user_propagate_register_final(final_eh);
         }
         
-        void user_propagate_register_eq(solver::eq_eh_t& eq_eh) override {
+        void user_propagate_register_eq(user_propagator::eq_eh_t& eq_eh) override {
             m_context.user_propagate_register_eq(eq_eh);
         }
         
-        void user_propagate_register_diseq(solver::eq_eh_t& diseq_eh) override {
+        void user_propagate_register_diseq(user_propagator::eq_eh_t& diseq_eh) override {
             m_context.user_propagate_register_diseq(diseq_eh);
         }
 
-        unsigned user_propagate_register(expr* e) override { 
-            return m_context.user_propagate_register(e);
+        void user_propagate_register_expr(expr* e) override { 
+            m_context.user_propagate_register_expr(e);
+        }
+
+        void user_propagate_register_created(user_propagator::created_eh_t& c) override {
+            m_context.user_propagate_register_created(c);
+        }
+
+        void user_propagate_register_decide(user_propagator::decide_eh_t& c) override {
+            m_context.user_propagate_register_decide(c);
         }
 
         struct scoped_minimize_core {
@@ -313,6 +320,10 @@ namespace {
         expr * get_assertion(unsigned idx) const override {
             SASSERT(idx < get_num_assertions());
             return m_context.get_formula(idx);
+        }
+
+        void get_units_core(expr_ref_vector& units) override {
+            m_context.get_units(units);
         }
 
         expr_ref_vector cube(expr_ref_vector& vars, unsigned cutoff) override {

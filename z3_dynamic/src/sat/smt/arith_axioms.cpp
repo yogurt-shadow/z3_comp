@@ -49,6 +49,14 @@ namespace arith {
         }
     }
 
+    void solver::mk_abs_axiom(app* n) {
+        expr* x = nullptr;
+        VERIFY(a.is_abs(n, x));
+        literal is_nonneg = mk_literal(a.mk_ge(x, a.mk_numeral(rational::zero(), n->get_sort())));
+        add_clause(~is_nonneg, eq_internalize(n, x));
+        add_clause(is_nonneg, eq_internalize(n, a.mk_uminus(x)));
+    }
+
     // t = n^0
     void solver::mk_power0_axioms(app* t, app* n) {
         expr_ref p0(a.mk_power0(n, t->get_arg(1)), m);
@@ -418,6 +426,7 @@ namespace arith {
             expr* p = nullptr, * q = nullptr;
             VERIFY(a.is_idiv(n, p, q));
             theory_var v1 = internalize_def(p);
+            ensure_column(v1);
             lp::impq r1 = get_ivalue(v1);
             rational r2;
 

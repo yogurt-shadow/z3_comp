@@ -19,9 +19,29 @@ Revision History:
 #include "util/trace.h"
 #include "util/str_hashtable.h"
 
+#ifndef SINGLE_THREAD
+#include <mutex>
+#include <thread>
+
+static std::mutex g_verbose_mux;
+void verbose_lock() { g_verbose_mux.lock(); }
+void verbose_unlock() { g_verbose_mux.unlock(); }
+
+static std::thread::id g_thread_id = std::this_thread::get_id();
+static bool g_is_threaded = false;
+
+bool is_threaded() {
+    if (g_is_threaded) return true;
+    g_is_threaded = std::this_thread::get_id() != g_thread_id;
+    return g_is_threaded;
+}
+
+#endif
+
 #ifdef _TRACE
 
 // wzh tout
+// std::ofstream tout(".z3-trace"); 
 std::ofstream tout("/home/wangzh/traces/z3_dynamic.z3-trace"); 
 
 static bool g_enable_all_trace_tags = false;

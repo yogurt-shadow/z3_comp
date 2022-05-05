@@ -652,10 +652,12 @@ namespace sat {
 
     inline void simplifier::propagate_unit(literal l) {
         unsigned old_trail_sz = s.m_trail.size();
+        unsigned num_clauses = s.m_clauses.size();
         s.assign_scoped(l);
         s.propagate_core(false); // must not use propagate(), since s.m_clauses is not in a consistent state.
         if (s.inconsistent())
             return;
+        m_use_list.reserve(s.num_vars());
         unsigned new_trail_sz = s.m_trail.size();
         for (unsigned i = old_trail_sz; i < new_trail_sz; i++) {
             literal l = s.m_trail[i];
@@ -671,6 +673,8 @@ namespace sat {
             }
             cs.reset();            
         }
+        for (unsigned i = num_clauses; i < s.m_clauses.size(); ++i) 
+            m_use_list.insert(*s.m_clauses[i]);
     }
 
     void simplifier::elim_lit(clause & c, literal l) {
@@ -1805,6 +1809,8 @@ namespace sat {
     */
     bool simplifier::resolve(clause_wrapper const & c1, clause_wrapper const & c2, literal l, literal_vector & r) {
         CTRACE("resolve_bug", !c1.contains(l), tout << c1 << "\n" << c2 << "\nl: " << l << "\n";);
+        if (m_visited.size() <= 2*s.num_vars())
+            m_visited.resize(2*s.num_vars(), false);
         SASSERT(c1.contains(l));
         SASSERT(c2.contains(~l));
         bool res = true;
@@ -1824,6 +1830,10 @@ namespace sat {
             literal l2 = c2[i];
             if (not_l == l2)
                 continue;
+            if ((~l2).index() >= m_visited.size()) {
+                s.display(std::cout << l2 << " " << s.num_vars() << " " << m_visited.size() << "\n");
+                exit(0);
+            }
             if (m_visited[(~l2).index()]) {
                 res = false;
                 break;
@@ -2021,10 +2031,14 @@ namespace sat {
         }
         remove_bin_clauses(pos_l);
         remove_bin_clauses(neg_l);
-        remove_clauses(pos_occs, pos_l);
-        remove_clauses(neg_occs, neg_l);
-        pos_occs.reset();
-        neg_occs.reset();
+        {
+            clause_use_list& pos_occs = m_use_list.get(pos_l);
+            clause_use_list& neg_occs = m_use_list.get(neg_l);
+            remove_clauses(pos_occs, pos_l);
+            remove_clauses(neg_occs, neg_l);
+            pos_occs.reset();
+            neg_occs.reset();
+        }
         return true;
     }
 

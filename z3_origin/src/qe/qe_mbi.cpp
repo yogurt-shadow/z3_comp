@@ -246,7 +246,7 @@ namespace qe {
         app_ref_vector avars(m); 
         bool_vector seen;
         arith_util a(m);
-        for (expr* e : subterms(lits)) {
+        for (expr* e : subterms::ground(lits)) {
             if ((m.is_eq(e) && a.is_int_real(to_app(e)->get_arg(0))) || a.is_arith_expr(e)) {
                 for (expr* arg : *to_app(e)) {
                     unsigned id = arg->get_id();
@@ -266,7 +266,11 @@ namespace qe {
     vector<mbp::def> uflia_mbi::arith_project(model_ref& mdl, app_ref_vector& avars, expr_ref_vector& lits) {
         mbp::arith_project_plugin ap(m);
         ap.set_check_purified(false);
-        return ap.project(*mdl.get(), avars, lits);
+        vector<mbp::def> defs;
+        bool ok = ap.project(*mdl.get(), avars, lits, defs);
+        (void)ok;
+        CTRACE("qe", !ok, tout << "projection failure ignored!!!!\n");
+        return defs;
     }
 
     mbi_result uflia_mbi::operator()(expr_ref_vector& lits, model_ref& mdl) {
@@ -368,7 +372,7 @@ namespace qe {
     void uflia_mbi::add_arith_dcert(model& mdl, expr_ref_vector& lits) {
         obj_map<func_decl, ptr_vector<app>> apps;
         arith_util a(m);
-        for (expr* e : subterms(lits)) {
+        for (expr* e : subterms::ground(lits)) {
             if (a.is_int_real(e) && is_uninterp(e) && to_app(e)->get_num_args() > 0) {
                 func_decl* f = to_app(e)->get_decl();
                 apps.insert_if_not_there(f, ptr_vector<app>()).push_back(to_app(e));
