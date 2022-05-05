@@ -816,6 +816,7 @@ namespace nlsat {
                     max_stage = curr_stage;
                     res_x = v;
                 }
+                TRACE("wzh", tout << "[debug] var " << v << " stage " << curr_stage << std::endl;);
             }
             return res_x;
         }
@@ -827,6 +828,9 @@ namespace nlsat {
         }
 
         var find_stage(var x) {
+            if(x == null_var){
+                return UINT_MAX;
+            }
             if(m_find_stage[x] != UINT_MAX){
                 return m_find_stage[x];
             }
@@ -1586,8 +1590,18 @@ namespace nlsat {
             // info.m_x  = m_pm.max_var(info.m_eq);
             // wzh dynamic
             info.m_x = max_stage_var_poly(info.m_eq);
+            var_vector curr_vars;
+            m_pm.vars(eq, curr_vars);
+            TRACE("wzh", tout << "[debug] vars in equal: " << std::endl;
+                for(var v:curr_vars){
+                    tout << v << " ";
+                }
+                tout << std::endl;
+            );
+            TRACE("wzh", tout << "[debug] max var for equal: " << info.m_x << std::endl;);
             // hzw dynamic
             info.m_k  = m_pm.degree(eq, info.m_x);
+            TRACE("wzh", tout << "[debug] degree of max var: " << info.m_k << std::endl;);
             polynomial_ref lc_eq(m_pm);
             lc_eq           = m_pm.coeff(eq, info.m_x, info.m_k);
             info.m_lc       = lc_eq.get();
@@ -1742,14 +1756,16 @@ namespace nlsat {
                 SASSERT(eq->size() == 1);
                 SASSERT(!eq->is_even(0));
                 poly * eq_p = eq->p(0);
-                // TRACE("wzh", std::cout << "[debug] show poly\n";
-                //     m_pm.display(std::cout, eq_p);
-                //     std::cout << std::endl;
-                //     std::cout << "[debug] show max: " << max << std::endl;
-                //     display_dynamic(std::cout);
-                //     std::cout << std::endl;
-                // );
+                TRACE("wzh", tout << "[debug] show poly\n";
+                    m_pm.display(tout, eq_p);
+                    tout << std::endl;
+                    tout << "[debug] show max: " << max << std::endl;
+                    display_dynamic(tout);
+                    tout << std::endl;
+                );
+                TRACE("wzh", tout << "[debug] enter verify" << std::endl;);
                 VERIFY(simplify(C, eq_p, max));
+                TRACE("wzh", tout << "[debug] exit verify" << std::endl;);
                 // add equation as an assumption                
                 TRACE("nlsat_simpilfy_core", display(tout << "adding equality as assumption ", literal(eq->bvar(), true)); tout << "\n";);
                 add_literal(literal(eq->bvar(), true));
@@ -1902,6 +1918,8 @@ namespace nlsat {
                 }
                 TRACE("wzh", tout << "[dynamic] dynamic vars: " << v << std::endl;);
             }
+            TRACE("wzh", tout << "[dynamic] reset stage cache" << std::endl;);
+            m_find_stage.reset();
             m_find_stage.resize(m_max+1, UINT_MAX);
             // hzw dynamic
             TRACE("nlsat_explain", 
@@ -2308,30 +2326,30 @@ namespace nlsat {
 
 #ifdef Z3DEBUG
 void pp(nlsat::explain::imp & ex, unsigned num, nlsat::literal const * ls) {
-    ex.display(std::cout, num, ls);
+    ex.display(tout, num, ls);
 }
 void pp(nlsat::explain::imp & ex, nlsat::scoped_literal_vector & ls) {
-    ex.display(std::cout, ls);
+    ex.display(tout, ls);
 }
 void pp(nlsat::explain::imp & ex, polynomial_ref const & p) {
-    ex.display(std::cout, p);
-    std::cout << std::endl;
+    ex.display(tout, p);
+    tout << std::endl;
 }
 void pp(nlsat::explain::imp & ex, polynomial::polynomial * p) {
     polynomial_ref _p(p, ex.m_pm);
-    ex.display(std::cout, _p);
-    std::cout << std::endl;
+    ex.display(tout, _p);
+    tout << std::endl;
 }
 void pp(nlsat::explain::imp & ex, polynomial_ref_vector const & ps) {
-    ex.display(std::cout, ps);
+    ex.display(tout, ps);
 }
 void pp_var(nlsat::explain::imp & ex, nlsat::var x) {
-    ex.display(std::cout, x);
-    std::cout << std::endl;
+    ex.display(tout, x);
+    tout << std::endl;
 }
 void pp_lit(nlsat::explain::imp & ex, nlsat::literal l) {
-    ex.display(std::cout, l);
-    std::cout << std::endl;
+    ex.display(tout, l);
+    tout << std::endl;
 }
 #endif
 

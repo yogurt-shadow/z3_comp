@@ -1928,23 +1928,23 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            if(m_xk == null_var){
-                m_xk = 0;
-            }
-            else {
-                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-                if(m_dynamic_vars.size() >= num_vars()){
-                    m_xk = null_var;
-                }
-                else{
-                    m_xk++;
-                }
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-                m_display_var(tout, m_xk);
-                tout << " (increasing)" << std::endl;
-            );
-            m_dynamic_vars.push_back(m_xk);
+            // if(m_xk == null_var){
+            //     m_xk = 0;
+            // }
+            // else {
+            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+            //     if(m_dynamic_vars.size() >= num_vars()){
+            //         m_xk = null_var;
+            //     }
+            //     else{
+            //         m_xk++;
+            //     }
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            //     m_display_var(tout, m_xk);
+            //     tout << " (increasing)" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end increasing
 
             // reverse select
@@ -1965,18 +1965,18 @@ namespace nlsat {
             // end reverse
 
             // random select
-            // if(m_dynamic_vars.size() >= num_vars()){
-            //     m_xk = null_var;
-            // }
-            // else {
-            //     m_xk = random_select();
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (random)" << std::endl;
-            //     tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
+            }
+            else {
+                m_xk = random_select();
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (random)" << std::endl;
+                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end random
         }
 
@@ -2216,6 +2216,7 @@ namespace nlsat {
             }
             m_assignment.reset();
             // wzh dynamic
+            m_find_stage.reset();
             m_find_stage.resize(num_vars() + 1, UINT_MAX);
             // hzw dynamic
         }
