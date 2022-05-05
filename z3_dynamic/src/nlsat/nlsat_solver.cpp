@@ -562,6 +562,9 @@ namespace nlsat {
         }
 
         var find_stage(var x) {
+            if(x == null_var){
+                return UINT_MAX;
+            }
             if(m_find_stage[x] != UINT_MAX){
                 return m_find_stage[x];
             }
@@ -582,7 +585,9 @@ namespace nlsat {
 
         // max_var(b) == x
         bool same_stage_bool(bool_var b, var x) {
-            // return all_assigned_bool(b) && contains_bool(b, x);
+            if(!is_arith_atom(b)){
+                return x == null_var;
+            }
             var_vector curr_vars = get_vars_bool(b);
             var stage = find_stage(x);
             // TRACE("wzh", tout << "[dynamic] stage: " << stage << std::endl;);
@@ -2350,9 +2355,9 @@ namespace nlsat {
                     m_display_var(tout, m_xk);
                     tout << std::endl;
                 );
-                // CTRACE("wzh", b_lvl == scope_lvl(), tout << "[debug] same level" << std::endl;);
-                // CTRACE("wzh", same_stage_bool(b, m_xk), tout << "[debug] same stage" << std::endl;);
                 // if (b_lvl == scope_lvl() /* same level */ && max_var(b) == m_xk /* same stage */) {
+                // wzh dynamic
+                // debug: when b is not an arith bool, return null_var
                 if(b_lvl == scope_lvl() && same_stage_bool(b, m_xk)){
                     TRACE("nlsat_resolve", tout << "literal is in the same level and stage, increasing marks\n";);
                     m_num_marks++;

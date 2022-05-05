@@ -136,8 +136,14 @@ namespace nlsat {
             std::ostream& operator()(std::ostream & out, var x) const override {
                 if (m_proc == nullptr)
                     m_default_display_var(out, x);
-                else
+                // wzh
+                else if(x == null_var){
+                    out << " null_var " << std::endl;
+                }
+                // hzw
+                else{
                     (*m_proc)(out, m_perm[x]);
+                }
                 return out;
             }
         };
