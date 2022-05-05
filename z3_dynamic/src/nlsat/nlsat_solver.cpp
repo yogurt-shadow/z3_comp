@@ -465,10 +465,12 @@ namespace nlsat {
         }
 
         var_vector get_vars_atom(atom const * a) const {
-            if(a == nullptr){
-                return var_vector(0);
-            }
-            return a->is_ineq_atom() ? get_vars_ineq(to_ineq_atom(a)) : get_vars_root(to_root_atom(a));
+            // if(a == nullptr){
+            //     return var_vector(0);
+            // }
+            return (a == nullptr) ? var_vector(0) : 
+                            (a->is_ineq_atom() ? get_vars_ineq(to_ineq_atom(a)) : 
+                                                 get_vars_root(to_root_atom(a)));
         }
 
         var_vector get_vars_ineq(ineq_atom const * a) const {
@@ -525,10 +527,12 @@ namespace nlsat {
         }
 
         var max_stage_atom(atom const * a) {
-            if(a == nullptr){
-                return null_var;
-            }
-            return a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : max_stage_root(to_root_atom(a));
+            // if(a == nullptr){
+            //     return null_var;
+            // }
+            return a == nullptr ? null_var : 
+                                (a->is_ineq_atom() ? max_stage_ineq(to_ineq_atom(a)) : 
+                                                     max_stage_root(to_root_atom(a)));
         }
 
         var max_stage_ineq(ineq_atom const * a) {
@@ -639,10 +643,12 @@ namespace nlsat {
         }
 
         bool contains_atom(atom const * a, var x) const {
-            if(a == nullptr){
-                return false;
-            }
-            return a->is_ineq_atom() ? contains_ineq(to_ineq_atom(a), x) : contains_root(to_root_atom(a), x);
+            // if(a == nullptr){
+            //     return false;
+            // }
+            return a == nullptr ? false : 
+                                (a->is_ineq_atom() ? contains_ineq(to_ineq_atom(a), x) : 
+                                                     contains_root(to_root_atom(a), x));
         }
 
         bool contains_ineq(ineq_atom const * a, var x) const {
@@ -764,10 +770,11 @@ namespace nlsat {
         }
 
         bool all_assigned_literal(literal l) const {
-            if(!is_arith_literal(l)){
-                return true;
-            }
-            return all_assigned_bool(l.var());
+            // if(!is_arith_literal(l)){
+            //     return true;
+            // }
+            // return all_assigned_bool(l.var());
+            return is_arith_literal(l) ? all_assigned_bool(l.var()) : true;
         }
 
         bool all_assigned_bool(bool_var b) const {
@@ -1534,7 +1541,7 @@ namespace nlsat {
         // Keep undoing until stage is new_xk
         void undo_until_stage(var new_xk) {
             // wzh dynamic
-            var stage_var = new_xk == null_var ? null_var : m_dynamic_vars[new_xk];
+            var stage_var = (new_xk == null_var) ? null_var : m_dynamic_vars[new_xk];
             undo_until(stage_pred(m_xk, stage_var));
             // hzw dynamic
             // undo_until(stage_pred(m_xk, new_xk));
