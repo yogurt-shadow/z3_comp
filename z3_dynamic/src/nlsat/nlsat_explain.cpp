@@ -322,27 +322,29 @@ namespace nlsat {
         ptr_vector<poly>  m_zero_fs;
         bool_vector     m_is_even;
         void add_zero_assumption(polynomial_ref & p) {
+            // wzh assumption
             // If p is of the form p1^n1 * ... * pk^nk,
             // then only the factors that are zero in the current interpretation needed to be considered.
             // I don't want to create a nested conjunction in the clause. 
             // Then, I assert p_i1 * ... * p_im  != 0
-            factor(p, m_factors);
-            unsigned num_factors = m_factors.size();
-            m_zero_fs.reset();
-            m_is_even.reset();
-            polynomial_ref f(m_pm);
-            for (unsigned i = 0; i < num_factors; i++) {
-                f = m_factors.get(i);
-                if (is_zero(sign(f))) {
-                    m_zero_fs.push_back(m_factors.get(i));
-                    m_is_even.push_back(false);
-                } 
-            }
-            SASSERT(!m_zero_fs.empty()); // one of the factors must be zero in the current interpretation, since p is zero in it.
-            literal l = m_solver.mk_ineq_literal(atom::EQ, m_zero_fs.size(), m_zero_fs.data(), m_is_even.data());
-            l.neg();
-            TRACE("nlsat_explain", tout << "adding (zero assumption) literal:\n"; display(tout, l); tout << "\n";);
-            add_literal(l);
+            // factor(p, m_factors);
+            // unsigned num_factors = m_factors.size();
+            // m_zero_fs.reset();
+            // m_is_even.reset();
+            // polynomial_ref f(m_pm);
+            // for (unsigned i = 0; i < num_factors; i++) {
+            //     f = m_factors.get(i);
+            //     if (is_zero(sign(f))) {
+            //         m_zero_fs.push_back(m_factors.get(i));
+            //         m_is_even.push_back(false);
+            //     } 
+            // }
+            // SASSERT(!m_zero_fs.empty()); // one of the factors must be zero in the current interpretation, since p is zero in it.
+            // literal l = m_solver.mk_ineq_literal(atom::EQ, m_zero_fs.size(), m_zero_fs.data(), m_is_even.data());
+            // l.neg();
+            // TRACE("nlsat_explain", tout << "adding (zero assumption) literal:\n"; display(tout, l); tout << "\n";);
+            // add_literal(l);
+            // hzw assumption
         }
 
         void add_simple_assumption(atom::kind k, poly * p, bool sign = false) {

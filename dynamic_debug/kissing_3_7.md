@@ -1,4 +1,4 @@
-# Debug f|| dynamic mcsat
+# Debug dynamic mcsat
 
 ## kissing_3_7 segmentation fault (random)
 

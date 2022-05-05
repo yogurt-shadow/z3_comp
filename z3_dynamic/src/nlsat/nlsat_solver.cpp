@@ -268,6 +268,11 @@ namespace nlsat {
             reset_statistics();
             mk_true_bvar();
             m_lemma_count = 0;
+
+            // wzh dynamic
+            m_dynamic_vars.reset();
+            m_find_stage.reset();
+            // hzw dynamic
         }
         
         ~imp() {
@@ -311,6 +316,10 @@ namespace nlsat {
             del_unref_atoms();
             m_cache.reset();
             m_assignment.reset();
+            // wzh dynamic
+            m_dynamic_vars.reset();
+            m_find_stage.reset();
+            // hzw dynamic
         }
 
         void clear() {
@@ -411,21 +420,22 @@ namespace nlsat {
             }
             return out;
         }
-        struct stage_info {
-            var m_var;
-            var m_stage;
 
-            stage_info(var x, var stage)
-            : m_var(x),
-            m_stage(stage)
-            {}
+        // struct stage_info {
+        //     var m_var;
+        //     var m_stage;
 
-            // used for projection
-            // large stage first
-            bool operator<(stage_info const & other){
-                return this->m_stage > other.m_stage;
-            }
-        };
+        //     stage_info(var x, var stage)
+        //     : m_var(x),
+        //     m_stage(stage)
+        //     {}
+
+        //     // used for projection
+        //     // large stage first
+        //     bool operator<(stage_info const & other){
+        //         return this->m_stage > other.m_stage;
+        //     }
+        // };
 
 
         // void fix_projection_order(unsigned num, literal const * ls){
@@ -636,10 +646,10 @@ namespace nlsat {
         }
 
         bool contains_bool(bool_var b, var x) const {
-            if(!is_arith_atom(b)){
-                return false;
-            }
-            return contains_atom(m_atoms[b], x);
+            // if(!is_arith_atom(b)){
+            //     return false;
+            // }
+            return is_arith_atom(b) ? contains_atom(m_atoms[b], x) : false;
         }
 
         bool contains_atom(atom const * a, var x) const {
@@ -1830,6 +1840,10 @@ namespace nlsat {
                 //     continue;
                 // }
                 // curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls);
+                TRACE("wzh", tout << "[debug] current m_xk: " << m_xk << " ";
+                    m_display_var(tout, m_xk);
+                    tout << std::endl;
+                );
                 curr_set = m_evaluator.infeasible_intervals(a, l.sign(), &cls, m_xk);
                 TRACE("nlsat_inf_set", tout << "infeasible set for literal: "; display(tout, l); tout << "\n"; m_ism.display(tout, curr_set); tout << "\n";
                       display(tout, cls) << "\n";); 
@@ -2670,6 +2684,11 @@ namespace nlsat {
                 // If lemma only contains literals from previous stages, then we can stop.
                 // We make progress by returning to a previous stage with additional information (new lemma)
                 // that forces us to select a new partial interpretation
+                TRACE("wzh", tout << "[debug] show lemma: \n";
+                    display(tout, m_lemma.size(), m_lemma.data());
+                    tout << std::endl;
+                    tout << "[debug] current m_xk: " << m_xk << std::endl;
+                );
                 if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data())){
                     TRACE("wzh", tout << "[debug] all literals from previous stages" << std::endl;);
                     break;
