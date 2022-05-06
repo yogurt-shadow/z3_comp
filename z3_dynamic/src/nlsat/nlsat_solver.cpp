@@ -133,7 +133,9 @@ namespace nlsat {
         // -----------------------
         var_vector m_dynamic_vars;
         var_vector m_find_stage;
-        // var_vector m_project_order;
+        // bool_var ==> vars  pure bool_var ==> empty
+        vector<var_vector> m_atom_vars;
+
         // hzw dynamic
 
 
@@ -272,6 +274,7 @@ namespace nlsat {
             // wzh dynamic
             m_dynamic_vars.reset();
             m_find_stage.reset();
+            m_atom_vars.reset();
             // hzw dynamic
         }
         
@@ -319,6 +322,7 @@ namespace nlsat {
             // wzh dynamic
             m_dynamic_vars.reset();
             m_find_stage.reset();
+            m_atom_vars.reset();
             // hzw dynamic
         }
 
@@ -471,7 +475,8 @@ namespace nlsat {
         }
 
         var_vector get_vars_bool(bool_var b) const {
-            return get_vars_atom(m_atoms[b]);
+            // return get_vars_atom(m_atoms[b]);
+            return m_atom_vars[b].empty() ? get_vars_atom(m_atoms[b]) : m_atom_vars[b];
         }
 
         var_vector get_vars_atom(atom const * a) const {
@@ -920,6 +925,9 @@ namespace nlsat {
             m_justifications.setx(b, null_justification, null_justification);
             m_bwatches      .setx(b, clause_vector(), clause_vector());
             m_dead          .setx(b, false, true);
+            // wzh dynamic
+            m_atom_vars.setx(b, var_vector(0), var_vector(0));
+            // hzw dynamic
             return b;
         }
 
@@ -994,6 +1002,9 @@ namespace nlsat {
             m_atoms[b] = nullptr;
             m_bvalues[b] = l_undef;
             m_bid_gen.recycle(b);
+            // wzh dynamic
+            m_atom_vars[b] = var_vector(0);
+            // hzw dynamic
         }
 
         void del(ineq_atom * a) {
@@ -1084,6 +1095,9 @@ namespace nlsat {
                 bool_var b = mk_bool_var_core();
                 m_atoms[b] = atom;
                 atom->m_bool_var = b;
+                // wzh dynamic
+                m_atom_vars[b] = get_vars_ineq(atom);
+                // hzw dynamic
                 TRACE("nlsat_verbose", display(tout << "create: b" << atom->m_bool_var << " ", *atom) << "\n";);
                 return b;
             }
@@ -1141,6 +1155,9 @@ namespace nlsat {
             m_atoms[b] = new_atom;
             new_atom->m_bool_var = b;
             m_pm.inc_ref(new_atom->p());
+            // wzh dynamic
+            m_atom_vars.push_back(get_vars_root(new_atom));
+            // hzw dynamic
             return b;
         }
 
