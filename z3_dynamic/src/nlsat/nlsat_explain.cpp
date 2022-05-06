@@ -322,28 +322,28 @@ namespace nlsat {
         ptr_vector<poly>  m_zero_fs;
         bool_vector     m_is_even;
         void add_zero_assumption(polynomial_ref & p) {
-            // wzh assumption
             // If p is of the form p1^n1 * ... * pk^nk,
             // then only the factors that are zero in the current interpretation needed to be considered.
             // I don't want to create a nested conjunction in the clause. 
             // Then, I assert p_i1 * ... * p_im  != 0
-            // factor(p, m_factors);
-            // unsigned num_factors = m_factors.size();
-            // m_zero_fs.reset();
-            // m_is_even.reset();
-            // polynomial_ref f(m_pm);
-            // for (unsigned i = 0; i < num_factors; i++) {
-            //     f = m_factors.get(i);
-            //     if (is_zero(sign(f))) {
-            //         m_zero_fs.push_back(m_factors.get(i));
-            //         m_is_even.push_back(false);
-            //     } 
-            // }
-            // SASSERT(!m_zero_fs.empty()); // one of the factors must be zero in the current interpretation, since p is zero in it.
-            // literal l = m_solver.mk_ineq_literal(atom::EQ, m_zero_fs.size(), m_zero_fs.data(), m_is_even.data());
-            // l.neg();
-            // TRACE("nlsat_explain", tout << "adding (zero assumption) literal:\n"; display(tout, l); tout << "\n";);
-            // add_literal(l);
+            // wzh assumption
+            factor(p, m_factors);
+            unsigned num_factors = m_factors.size();
+            m_zero_fs.reset();
+            m_is_even.reset();
+            polynomial_ref f(m_pm);
+            for (unsigned i = 0; i < num_factors; i++) {
+                f = m_factors.get(i);
+                if (is_zero(sign(f))) {
+                    m_zero_fs.push_back(m_factors.get(i));
+                    m_is_even.push_back(false);
+                } 
+            }
+            SASSERT(!m_zero_fs.empty()); // one of the factors must be zero in the current interpretation, since p is zero in it.
+            literal l = m_solver.mk_ineq_literal(atom::EQ, m_zero_fs.size(), m_zero_fs.data(), m_is_even.data());
+            l.neg();
+            TRACE("nlsat_explain", tout << "adding (zero assumption) literal:\n"; display(tout, l); tout << "\n";);
+            add_literal(l);
             // hzw assumption
         }
 
@@ -373,6 +373,7 @@ namespace nlsat {
             // var x = max_var(p);
             // wzh dynamic
             var x = max_stage_var_poly(p);
+            TRACE("wzh", tout << "[debug] max var in elim: " << x << std::endl;);
             // hzw dynamic
             unsigned k = degree(p, x);
             SASSERT(k > 0);
@@ -412,6 +413,7 @@ namespace nlsat {
                         return;
                     // lc is not the zero polynomial, but it vanished in the current interpretation.
                     // so we keep searching...
+                    TRACE("wzh", tout << "[debug] add zero assumption\n";);
                     add_zero_assumption(lc);
                 }
                 if (k == 0) {
@@ -471,6 +473,7 @@ namespace nlsat {
            Remark: root atoms are not normalized
         */
         literal normalize(literal l, var max) {
+            TRACE("wzh", tout << "[debug] enter normalize literal" << std::endl;);
             bool_var b = l.var();
             if (b == true_bool_var)
                 return l;
@@ -489,9 +492,15 @@ namespace nlsat {
                 // hzw dynamic
                 for (unsigned i = 0; i < sz; i++) {
                     p = a->p(i);
+                    TRACE("wzh", tout << "[debug] show polynomial:\n";
+                        m_pm.display(tout, p);
+                        tout << std::endl;
+                    );
                     // if (max_var(p) == max)
-                    if(max_stage_var_poly(p) == max)
+                    if(max_stage_var_poly(p) == max){
+                        TRACE("wzh", tout << "[debug] max stage is equal to max, enter elim vanishing\n";);
                         elim_vanishing(p); // eliminate vanishing coefficients of max
+                    }
                     // if (is_const(p) || max_var(p) < max) {
                     if(is_const(p) || max_stage_poly(p) < max_stage){
                         int s = sign(p); 
@@ -818,7 +827,7 @@ namespace nlsat {
                     max_stage = curr_stage;
                     res_x = v;
                 }
-                TRACE("wzh", tout << "[debug] var " << v << " stage " << curr_stage << std::endl;);
+                // TRACE("wzh", tout << "[debug] var " << v << " stage " << curr_stage << std::endl;);
             }
             return res_x;
         }
@@ -1811,6 +1820,8 @@ namespace nlsat {
                 var max = max_stage_or_unassigned_lts(num, ls);
                 SASSERT(max != null_var);
                 TRACE("nlsat_explain", display(tout << "core before normalization\n", m_core2) << "\n";);
+                // fix bug for MulliganEconomicsModel0054e
+                // we disable normalize
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
                 TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
@@ -1928,7 +1939,10 @@ namespace nlsat {
                   tout << "[explain] set of literals is infeasible in the current interpretation\n"; 
                   display(tout, num, ls) << "\n";
                   m_assignment.display(tout);
-                  );
+            );
+            TRACE("wzh", display_dynamic(tout);
+                tout << std::endl;
+            );
             m_result = &result;
             process(num, ls);
             reset_already_added();
