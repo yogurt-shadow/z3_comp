@@ -648,13 +648,13 @@ namespace nlsat {
         // -----------------------
         var max_stage_or_unassigned_ps(polynomial_ref_vector & ps){
             var_vector curr_vars = get_vars_ps(ps);
-            var max_stage = null_var, res_x = null_var;
+            var max_stage = 0, res_x = null_var;
             for(var v: curr_vars){
                 if(!m_assignment.is_assigned(v)){
                     return v;
                 }
                 var curr = find_stage(v);
-                if(max_stage == null_var || curr > max_stage){
+                if(max_stage == 0 || curr > max_stage){
                     max_stage = curr;
                     res_x = v;
                 }
@@ -664,13 +664,13 @@ namespace nlsat {
 
         var max_stage_or_unassigned_lts(unsigned num, literal const * ls) {
             var_vector curr_vars = get_vars_lts(num, ls);
-            var max_stage = null_var, res_x = null_var;
+            var max_stage = 0, res_x = null_var;
             for(var v: curr_vars){
                 if(!m_assignment.is_assigned(v)){
                     return v;
                 }
                 var curr_stage = find_stage(v);
-                if(max_stage == null_var || curr_stage > max_stage){
+                if(max_stage == 0 || curr_stage > max_stage){
                     max_stage = curr_stage;
                     res_x = v;
                 }
@@ -680,14 +680,14 @@ namespace nlsat {
 
         var max_stage_or_unassigned_atom(atom const * a) {
             var_vector res = get_vars_atom(a);
-            var max_stage = null_var;
+            var max_stage = 0;
             var res_x = null_var;
             for(var v: res){
                 if(!m_assignment.is_assigned(v)){
                     return v;
                 }
                 var curr_stage = find_stage(v);
-                if(max_stage == null_var || curr_stage > max_stage){
+                if(max_stage == 0 || curr_stage > max_stage){
                     max_stage = curr_stage;
                     res_x = v;
                 }
@@ -765,12 +765,12 @@ namespace nlsat {
 
 
         var max_stage_lts(unsigned sz, literal const * cls) {
-            var x      = null_var;
+            var x      = 0;
             for (unsigned i = 0; i < sz; i++) {
                 literal l = cls[i];
                 // if (is_arith_literal(l)) {
                 var y = max_stage_literal(l);
-                if (x == null_var || y > x)
+                if (x == 0 || y > x)
                     x = y;
                 // }
             }
@@ -778,7 +778,7 @@ namespace nlsat {
         }
 
         var max_stage_literal(literal l) {
-            SASSERT(all_assigned_literal(l));
+            // SASSERT(all_assigned_literal(l));
             return max_stage_bool(l.var());
         }
 
@@ -794,11 +794,14 @@ namespace nlsat {
         }
 
         var max_stage_ineq(ineq_atom const * a) {
-            var res = null_var;
+            var res = 0;
             for(unsigned i = 0; i < a->size(); i++){
                 var curr = max_stage_poly(a->p(i));
-                if(res == null_var || curr > res){
+                if(res == 0 || curr > res){
                     res = curr;
+                }
+                if(res == UINT_MAX){
+                    return res;
                 }
             }
             return res;
@@ -807,23 +810,26 @@ namespace nlsat {
         var max_stage_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
-            var x = null_var;
+            var res = 0;
             for(var v: curr){
                 var curr_stage = find_stage(v);
-                if(x == null_var || curr_stage > x){
-                    x = curr_stage;
+                if(res == 0 || curr_stage > res){
+                    res = curr_stage;
+                }
+                if(res == UINT_MAX){
+                    return res;
                 }
             }
-            return x;
+            return res;
         }
 
         var max_stage_var_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
-            var res_x = null_var, max_stage = 0;
+            var res_x = 0, max_stage = 0;
             for(var v: curr){
                 var curr_stage = find_stage(v);
-                if(res_x == null_var || curr_stage > max_stage){
+                if(max_stage == 0 || curr_stage > max_stage){
                     max_stage = curr_stage;
                     res_x = v;
                 }
@@ -853,6 +859,41 @@ namespace nlsat {
             }
             UNREACHABLE();
             return UINT_MAX;
+        }
+
+        bool contains_poly(poly const * p, var x){
+            var_vector curr_vars;
+            m_pm.vars(p, curr_vars);
+            return curr_vars.contains(x);
+        }
+
+        bool contains_ineq(ineq_atom const * a, var x){
+            for(unsigned i = 0; i < a->size(); i++){
+                poly * p = a->p(i);
+                if(contains_poly(p, x)){
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool contains_root(root_atom const *a, var x){
+            return contains_poly(a->p(), x) || a->x() == x;
+        }
+
+        bool contains_atom(atom const * a, var x){
+            if(a == nullptr){
+                return false;
+            }
+            return a->is_ineq_atom() ? contains_ineq(to_ineq_atom(a), x) : contains_root(to_root_atom(a), x);
+        }
+
+        bool contains_bool(bool_var b, var x){
+            return contains_atom(m_atoms[b], x);
+        }
+
+        bool contains_literal(literal l, var x){
+            return contains_bool(l.var(), x);
         }
         // hzw dynamic
 
@@ -1573,9 +1614,15 @@ namespace nlsat {
                 if (l.sign())
                     new_lit.neg();
                 TRACE("nlsat_simplify_core", tout << "simplified literal:\n"; display(tout, new_lit) << " " << m_solver.value(new_lit) << "\n";);
-                
+                // TRACE("wzh", tout << "[debug] simplified literal:\n"; display(tout, new_lit) << std::endl;);
+                // TRACE("wzh", tout << "[debug] display max var: " << max << std::endl;);
+                // TRACE("wzh", tout << "[debug] max stage literal, max stage: " << find_stage(max) << std::endl;);
+                // TRACE("wzh", tout << "[debug] literal's max stage: " << max_stage_literal(new_lit) << std::endl;);
+                // TRACE("wzh", display_dynamic(tout) << std::endl;);
+                // if (max_stage_literal(new_lit) < find_stage(max)) {
+                if(!contains_literal(new_lit, max)){
                 // if (max_var(new_lit) < max) {
-                if (max_stage_literal(new_lit) < find_stage(max)) {
+                // if(false){
                     if (m_solver.value(new_lit) == l_true) {
                         new_lit = l;
                     }
@@ -1627,8 +1674,11 @@ namespace nlsat {
             for (unsigned i = 0; i < sz; i++) {
                 literal  l = C[i];
                 new_lit = null_literal;
+                // fix bug of Mulligan here
                 simplify(l, info, max, new_lit);
                 SASSERT(new_lit != null_literal);
+                // wzh
+                // unchanged
                 if (l == new_lit) {
                     C.set(j, l);
                     j++;
@@ -1653,6 +1703,7 @@ namespace nlsat {
                     add_assumption(atom::EQ, info.m_lc, true);
             }
             return modified_core;
+            // return false;
         }
 
         /**
@@ -1821,12 +1872,13 @@ namespace nlsat {
                 SASSERT(max != null_var);
                 TRACE("nlsat_explain", display(tout << "core before normalization\n", m_core2) << "\n";);
                 // fix bug for MulliganEconomicsModel0054e
-                // we disable normalize
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
-                TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
-                simplify(m_core2, max);
-                TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
+                // TRACE("nlsat_explain", display(tout << "core before simplify\n", m_core2) << "\n";);
+                // fix bug for MulliganEconomicsModel0054e
+                // simplify(m_core2, max);
+                // TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
+                TRACE("wzh", tout << "[dynamic] disable simplify currently\n";);
                 main(m_core2.size(), m_core2.data());
                 m_core2.reset();
             }

@@ -515,12 +515,12 @@ namespace nlsat {
         // }
 
         var max_stage_lts(unsigned sz, literal const * cls) {
-            var x      = null_var;
+            var x      = 0;
             for (unsigned i = 0; i < sz; i++) {
                 literal l = cls[i];
                 if (is_arith_literal(l)) {
                     var y = max_stage_literal(l);
-                    if (x == null_var || y > x)
+                    if (x == 0 || y > x)
                         x = y;
                 }
             }
@@ -546,10 +546,10 @@ namespace nlsat {
         }
 
         var max_stage_ineq(ineq_atom const * a) {
-            var res = null_var;
+            var res = 0;
             for(unsigned i = 0; i < a->size(); i++){
                 var curr = max_stage_poly(a->p(i));
-                if(res == null_var || curr > res){
+                if(res == 0 || curr > res){
                     res = curr;
                 }
             }
@@ -559,10 +559,10 @@ namespace nlsat {
         var max_stage_poly(poly const * p) {
             var_vector curr;
             m_pm.vars(p, curr);
-            var x = null_var;
+            var x = 0;
             for(var v: curr){
                 var curr_stage = find_stage(v);
-                if(x == null_var || curr_stage > x){
+                if(x == 0 || curr_stage > x){
                     x = curr_stage;
                 }
             }
