@@ -135,6 +135,7 @@ namespace nlsat {
         var_vector m_find_stage;
         // bool_var ==> vars  pure bool_var ==> empty
         vector<var_vector> m_atom_vars;
+        bool_vector m_atom_vars_cached;
 
         // hzw dynamic
 
@@ -275,6 +276,7 @@ namespace nlsat {
             m_dynamic_vars.reset();
             m_find_stage.reset();
             m_atom_vars.reset();
+            m_atom_vars_cached.reset();
             // hzw dynamic
         }
         
@@ -323,6 +325,7 @@ namespace nlsat {
             m_dynamic_vars.reset();
             m_find_stage.reset();
             m_atom_vars.reset();
+            m_atom_vars_cached.reset();
             // hzw dynamic
         }
 
@@ -474,12 +477,15 @@ namespace nlsat {
             return get_vars_bool(l.var());
         }
 
-        var_vector get_vars_bool(bool_var b) const {
-            // return get_vars_atom(m_atoms[b]);
-            return m_atom_vars[b].empty() ? get_vars_atom(m_atoms[b]) : m_atom_vars[b];
+        var_vector get_vars_bool(bool_var b) {
+            if(!m_atom_vars_cached[b]){
+                m_atom_vars_cached[b] = true;
+                m_atom_vars[b] = get_vars_atom(m_atoms[b]);
+            }
+            return m_atom_vars[b];
         }
 
-        var_vector get_vars_atom(atom const * a) const {
+        var_vector get_vars_atom(atom const * a) {
             // if(a == nullptr){
             //     return var_vector(0);
             // }
@@ -488,7 +494,7 @@ namespace nlsat {
                                                  get_vars_root(to_root_atom(a)));
         }
 
-        var_vector get_vars_ineq(ineq_atom const * a) const {
+        var_vector get_vars_ineq(ineq_atom const * a) {
             var_vector res;
             for(unsigned i = 0; i < a->size(); i++){
                 var_vector curr;
@@ -502,7 +508,7 @@ namespace nlsat {
             return res;
         }
 
-        var_vector get_vars_root(root_atom const * a) const {
+        var_vector get_vars_root(root_atom const * a) {
             var_vector res;
             m_pm.vars(a->p(), res);
             if(!res.contains(a->x())){
@@ -632,23 +638,23 @@ namespace nlsat {
         }
 
         // max_var(a) == x
-        bool same_stage_atom(atom const * a, var x) {
-            // return all_assigned_atom(a) && contains_atom(a, x);
-            var_vector curr_vars = get_vars_atom(a);
-            var stage = find_stage(x);
-            bool contain = false;
-            for(var v: curr_vars){
-                if(v == x){
-                    contain = true;
-                }
-                else {
-                    if(find_stage(v) > stage){
-                        return false;
-                    }
-                }
-            }
-            return contain;
-        }
+        // bool same_stage_atom(atom const * a, var x) {
+        //     // return all_assigned_atom(a) && contains_atom(a, x);
+        //     var_vector curr_vars = get_vars_atom(a);
+        //     var stage = find_stage(x);
+        //     bool contain = false;
+        //     for(var v: curr_vars){
+        //         if(v == x){
+        //             contain = true;
+        //         }
+        //         else {
+        //             if(find_stage(v) > stage){
+        //                 return false;
+        //             }
+        //         }
+        //     }
+        //     return contain;
+        // }
 
         bool contains_bool(bool_var b, var x) const {
             // if(!is_arith_atom(b)){
@@ -927,6 +933,7 @@ namespace nlsat {
             m_dead          .setx(b, false, true);
             // wzh dynamic
             m_atom_vars.setx(b, var_vector(0), var_vector(0));
+            m_atom_vars_cached.setx(b, false, false);
             // hzw dynamic
             return b;
         }
@@ -1004,6 +1011,7 @@ namespace nlsat {
             m_bid_gen.recycle(b);
             // wzh dynamic
             m_atom_vars[b] = var_vector(0);
+            m_atom_vars_cached[b] = false;
             // hzw dynamic
         }
 
@@ -1096,7 +1104,8 @@ namespace nlsat {
                 m_atoms[b] = atom;
                 atom->m_bool_var = b;
                 // wzh dynamic
-                m_atom_vars[b] = get_vars_ineq(atom);
+                // m_atom_vars[b] = get_vars_ineq(atom);
+                // m_atom_vars_cached[b] = true;
                 // hzw dynamic
                 TRACE("nlsat_verbose", display(tout << "create: b" << atom->m_bool_var << " ", *atom) << "\n";);
                 return b;
@@ -1156,7 +1165,8 @@ namespace nlsat {
             new_atom->m_bool_var = b;
             m_pm.inc_ref(new_atom->p());
             // wzh dynamic
-            m_atom_vars.push_back(get_vars_root(new_atom));
+            // m_atom_vars[b] = get_vars_root(new_atom);
+            // m_atom_vars_cached[b] = true;
             // hzw dynamic
             return b;
         }
