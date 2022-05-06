@@ -1535,6 +1535,10 @@ namespace nlsat {
             polynomial_ref        new_factor(m_pm);
             for (unsigned s = 0; s < num_factors; s++) {
                 poly * f = _a->p(s);
+                TRACE("wzh", tout << "[debug] loop factors:\n";
+                    m_pm.display(tout, f);
+                    tout << std::endl;
+                );
                 bool is_even = _a->is_even(s);
                 if (m_pm.degree(f, info.m_x) < info.m_k) {
                     new_factors.push_back(f);
@@ -1610,10 +1614,11 @@ namespace nlsat {
                 atom::kind new_k = _a->get_kind();
                 if (atom_sign < 0)
                     new_k = atom::flip(new_k);
+                TRACE("wzh", tout << "[debug] make ineq literal for new lit\n";);
                 new_lit = m_solver.mk_ineq_literal(new_k, new_factors.size(), new_factors.data(), new_factors_even.data());
                 if (l.sign())
                     new_lit.neg();
-                TRACE("nlsat_simplify_core", tout << "simplified literal:\n"; display(tout, new_lit) << " " << m_solver.value(new_lit) << "\n";);
+                TRACE("nlsat_simplify_core", tout << "simplified literal:\n"; display(tout, new_lit) << "\n" << m_solver.value(new_lit) << "\n";);
                 // TRACE("wzh", tout << "[debug] simplified literal:\n"; display(tout, new_lit) << std::endl;);
                 // TRACE("wzh", tout << "[debug] display max var: " << max << std::endl;);
                 // TRACE("wzh", tout << "[debug] max stage literal, max stage: " << find_stage(max) << std::endl;);
@@ -1627,6 +1632,7 @@ namespace nlsat {
                         new_lit = l;
                     }
                     else {
+                        TRACE("wzh", tout << "[debug] enter new literal\n";);
                         add_literal(new_lit);
                         new_lit = true_literal;
                     }
@@ -1729,6 +1735,11 @@ namespace nlsat {
                 if (_a->is_even(0))
                     continue;
                 unsigned d = m_pm.degree(_a->p(0), max);
+                // wzh dynamic
+                if(d == 0){
+                    continue;
+                }
+                // hzw dynamic
                 SASSERT(d > 0);
                 if (d < min_d) {
                     r     = _a->p(0);
@@ -1797,7 +1808,9 @@ namespace nlsat {
         */
         void simplify(scoped_literal_vector & C, var max) {
             // Simplify using equations in the core
+            // fix bug Mulligan here
             while (!C.empty()) {
+                TRACE("wzh", tout << "[debug] select stage equal\n";);
                 poly * eq = select_eq(C, max);
                 if (eq == nullptr)
                     break;
@@ -1807,11 +1820,14 @@ namespace nlsat {
                 );
                 TRACE("nlsat_simplify_core", tout << "using equality for simplifying core\n"; 
                       m_pm.display(tout, eq, m_solver.display_proc()); tout << "\n";);
-                if (!simplify(C, eq, max))
+                if (!simplify(C, eq, max)){
+                    TRACE("wzh", tout << "[debug] break here\n";);
                     break;
+                }
             }
             // Simplify using equations using variables from lower stages.
             while (!C.empty()) {
+                TRACE("wzh", tout << "[debug] selecet lower stage equal\n";);
                 ineq_atom * eq = select_lower_stage_eq(C, max);
                 if (eq == nullptr)
                     break;
@@ -1878,6 +1894,7 @@ namespace nlsat {
                 // fix bug for MulliganEconomicsModel0054e
                 // simplify(m_core2, max);
                 // TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
+                TRACE("wzh", tout << "[dynamic] we disable simplify currently" << std::endl;);
                 main(m_core2.size(), m_core2.data());
                 m_core2.reset();
             }
