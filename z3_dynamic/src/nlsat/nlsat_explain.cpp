@@ -1619,8 +1619,8 @@ namespace nlsat {
                 // TRACE("wzh", tout << "[debug] max stage literal, max stage: " << find_stage(max) << std::endl;);
                 // TRACE("wzh", tout << "[debug] literal's max stage: " << max_stage_literal(new_lit) << std::endl;);
                 // TRACE("wzh", display_dynamic(tout) << std::endl;);
-                // if (max_stage_literal(new_lit) < find_stage(max)) {
-                if(!contains_literal(new_lit, max)){
+                if (max_stage_literal(new_lit) < find_stage(max)) {
+                // if(!contains_literal(new_lit, max)){
                 // if (max_var(new_lit) < max) {
                 // if(false){
                     if (m_solver.value(new_lit) == l_true) {
@@ -1878,7 +1878,6 @@ namespace nlsat {
                 // fix bug for MulliganEconomicsModel0054e
                 // simplify(m_core2, max);
                 // TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
-                TRACE("wzh", tout << "[dynamic] disable simplify currently\n";);
                 main(m_core2.size(), m_core2.data());
                 m_core2.reset();
             }

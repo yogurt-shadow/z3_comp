@@ -372,9 +372,9 @@ namespace nlsat {
             m_sign_table_tmp(m_am) {
         }
 
-        var max_var(poly const * p) const {
-            return m_pm.max_var(p);
-        }
+        // var max_var(poly const * p) const {
+        //     return m_pm.max_var(p);
+        // }
 
         /**
            \brief Return the sign of the polynomial in the current interpretation.
@@ -383,7 +383,8 @@ namespace nlsat {
         */
         ::sign eval_sign(poly * p) {
             // TODO: check if it is useful to cache results
-            SASSERT(m_assignment.is_assigned(max_var(p)));
+            // SASSERT(m_assignment.is_assigned(max_var(p)));
+            SASSERT(all_assigned_poly(p));
             return m_am.eval_sign_at(polynomial_ref(p, m_pm), m_assignment);
         }
         
@@ -420,14 +421,18 @@ namespace nlsat {
         }
 
         bool all_assigned_root(root_atom const * a) const {
+            return all_assigned_poly(a->p()) && m_assignment.is_assigned(a->x());
+        }
+
+        bool all_assigned_poly(poly const * p) const {
             var_vector curr_vars;
-            m_pm.vars(a->p(), curr_vars);
+            m_pm.vars(p, curr_vars);
             for(var v: curr_vars){
                 if(!m_assignment.is_assigned(v)){
                     return false;
                 }
             }
-            return m_assignment.is_assigned(a->x());
+            return true;
         }
         // hzw dynamic
 
@@ -485,17 +490,22 @@ namespace nlsat {
 
         svector<sign> m_add_signs_tmp;
         void add(poly * p, var x, sign_table & t) {
-            SASSERT(m_pm.max_var(p) <= x);
-            if (m_pm.max_var(p) < x) {
+            // SASSERT(m_pm.max_var(p) <= x);
+            // if (m_pm.max_var(p) < x) {
+                // t.add_const(eval_sign(p));
+            // }
+            // wzh dynamic
+            if(all_assigned_poly(p)){
                 t.add_const(eval_sign(p));
             }
+            // hzw dynamic
             else {
                 // isolate roots of p
                 scoped_anum_vector & roots = m_add_roots_tmp;
                 svector<sign> & signs = m_add_signs_tmp;
                 roots.reset();
                 signs.reset();
-                TRACE("nlsat_evaluator", tout << "x: " << x << " max_var(p): " << m_pm.max_var(p) << "\n";);
+                // TRACE("nlsat_evaluator", tout << "x: " << x << " max_var(p): " << m_pm.max_var(p) << "\n";);
                 // Note: I added undef_var_assignment in the following statement, to allow us to obtain the infeasible interval sets
                 // even when the maximal variable is assigned. I need this feature to minimize conflict cores.
                 m_am.isolate_roots(polynomial_ref(p, m_pm), undef_var_assignment(m_assignment, x), roots, signs);
