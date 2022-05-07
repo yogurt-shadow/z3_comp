@@ -1450,8 +1450,13 @@ namespace nlsat {
             save_new_stage_trail();
             if (m_xk == null_var)
                 m_xk = 0;
-            else
+            else{
                 m_xk++;
+            }
+            TRACE("wzh", tout << "[debug] select new arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << std::endl;
+            );
         }
 
         /**
@@ -1614,31 +1619,31 @@ namespace nlsat {
             }
 
             // wzh reorder static            
-            if (!can_reorder()) {
+            // if (!can_reorder()) {
 
-            }
-            else if (m_random_order) {
-                shuffle_vars();
-                reordered = true;
-            }
-            else if (m_reorder) {
-                heuristic_reorder();
-                reordered = true;
-            }
-            TRACE("wzh", tout << "[debug] after reorder, show static order:\n";
-                for(var i = 0; i < num_vars(); i++){
-                    tout << "var: " << i << " ";
-                    m_display_var(tout, i);
-                    tout << std::endl;
-                }
-            );
-            TRACE("wzh", tout << "[debug] after debug order, show static order:\n";
-                for(var i = 0; i < num_vars(); i++){
-                    tout << "var: " << i << " ";
-                    m_display_var(tout, i);
-                    tout << std::endl;
-                }
-            );
+            // }
+            // else if (m_random_order) {
+            //     shuffle_vars();
+            //     reordered = true;
+            // }
+            // else if (m_reorder) {
+            //     heuristic_reorder();
+            //     reordered = true;
+            // }
+            // TRACE("wzh", tout << "[debug] after reorder, show static order:\n";
+            //     for(var i = 0; i < num_vars(); i++){
+            //         tout << "var: " << i << " ";
+            //         m_display_var(tout, i);
+            //         tout << std::endl;
+            //     }
+            // );
+            // TRACE("wzh", tout << "[debug] after debug order, show static order:\n";
+            //     for(var i = 0; i < num_vars(); i++){
+            //         tout << "var: " << i << " ";
+            //         m_display_var(tout, i);
+            //         tout << std::endl;
+            //     }
+            // );
             // hzw reorder static
 
             TRACE("wzh", tout << "show var order:\n"; display_vars(tout););

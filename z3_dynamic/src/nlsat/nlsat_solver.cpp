@@ -136,7 +136,8 @@ namespace nlsat {
         // bool_var ==> vars  pure bool_var ==> empty
         vector<var_vector> m_atom_vars;
         bool_vector m_atom_vars_cached;
-
+        // arith_var ==> bool var
+        vector<var_vector> m_var_atoms;
         // hzw dynamic
 
 
@@ -277,6 +278,7 @@ namespace nlsat {
             m_find_stage.reset();
             m_atom_vars.reset();
             m_atom_vars_cached.reset();
+            m_var_atoms.reset();
             // hzw dynamic
         }
         
@@ -326,6 +328,7 @@ namespace nlsat {
             m_find_stage.reset();
             m_atom_vars.reset();
             m_atom_vars_cached.reset();
+            m_var_atoms.reset();
             // hzw dynamic
         }
 
@@ -478,11 +481,24 @@ namespace nlsat {
         }
 
         var_vector get_vars_bool(bool_var b) {
+            // wzh cache
+            TRACE("wzh", tout << "[debug] enter get vars bool for " << b << std::endl;
+                display_atom(tout, b);
+                tout << std::endl;
+            );
             if(!m_atom_vars_cached[b]){
+                TRACE("wzh", tout << "[debug] no cache for bool var" << std::endl;);
                 m_atom_vars_cached[b] = true;
                 m_atom_vars[b] = get_vars_atom(m_atoms[b]);
             }
+            else{
+                TRACE("wzh", tout << "[debug] cached bool var" << std::endl;);
+            }
+            TRACE("wzh", tout << "[debug] display vars: " << std::endl;
+                display_var_vector(tout, m_atom_vars[b]);
+            );
             return m_atom_vars[b];
+            // hzw cache
         }
 
         var_vector get_vars_atom(atom const * a) {
@@ -955,11 +971,17 @@ namespace nlsat {
             m_var2eq.    push_back(nullptr);
             m_perm.      push_back(x);
             m_inv_perm.  push_back(x);
+            // wzh dynamic
+            m_var_atoms.push_back(var_vector(0));
+            // hzw dynamic
             // SASSERT(m_is_int.size() == m_watches.size());
             SASSERT(m_is_int.size() == m_infeasible.size());
             SASSERT(m_is_int.size() == m_var2eq.size());
             SASSERT(m_is_int.size() == m_perm.size());
             SASSERT(m_is_int.size() == m_inv_perm.size());
+            // wzh dynamic
+            SASSERT(m_is_int.size() == m_var_atoms.size());
+            // hzw dynamic
         }
 
         bool_vector m_found_vars;
@@ -1103,14 +1125,41 @@ namespace nlsat {
                 bool_var b = mk_bool_var_core();
                 m_atoms[b] = atom;
                 atom->m_bool_var = b;
-                // wzh dynamic
-                // m_atom_vars[b] = get_vars_ineq(atom);
-                // m_atom_vars_cached[b] = true;
-                // hzw dynamic
                 TRACE("nlsat_verbose", display(tout << "create: b" << atom->m_bool_var << " ", *atom) << "\n";);
+                // wzh dynamic
+                TRACE("wzh", tout << "[debug] collect vars for ineq atom " << b << std::endl;);
+                m_atom_vars[b] = get_vars_ineq(atom);
+                m_atom_vars_cached[b] = true;
+                TRACE("wzh", display_atom_vars(tout););
+                // hzw dynamic
                 return b;
             }
         }
+
+        // wzh dynamic
+        std::ostream & display_atom_vars(std::ostream & out) const {
+            out << "[dynamic] show vars for atoms\n";
+            for(bool_var i = 0; i < m_atom_vars.size(); i++){
+                if(m_atom_vars_cached[i]){
+                    out << "[dynamic] vars for bool_var " << i << ": " << std::endl;
+                    display_var_vector(out, m_atom_vars[i]);
+                }
+                else{
+                    out << "[dynamic] no memory for bool_var " << i << std::endl;
+                }
+            }
+            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_var_vector(std::ostream & out, var_vector const & vars) const {
+            for(var v: vars){
+                out << v << " ";
+            }
+            out << std::endl;
+            return out;
+        }
+        // hzw dynamic
 
         literal mk_ineq_literal(atom::kind k, unsigned sz, poly * const * ps, bool const * is_even) {
             SASSERT(k == atom::LT || k == atom::GT || k == atom::EQ);
@@ -1165,8 +1214,9 @@ namespace nlsat {
             new_atom->m_bool_var = b;
             m_pm.inc_ref(new_atom->p());
             // wzh dynamic
-            // m_atom_vars[b] = get_vars_root(new_atom);
-            // m_atom_vars_cached[b] = true;
+            TRACE("wzh", tout << "[debug] collect vars for root atom " << b << std::endl;);
+            m_atom_vars[b] = get_vars_root(new_atom);
+            m_atom_vars_cached[b] = true;
             // hzw dynamic
             return b;
         }
@@ -1990,23 +2040,23 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
-            // if(m_xk == null_var){
-            //     m_xk = 0;
-            // }
-            // else {
-            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-            //     if(m_dynamic_vars.size() >= num_vars()){
-            //         m_xk = null_var;
-            //     }
-            //     else{
-            //         m_xk++;
-            //     }
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (increasing)" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
+            if(m_xk == null_var){
+                m_xk = 0;
+            }
+            else {
+                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                }
+                else{
+                    m_xk++;
+                }
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (increasing)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end increasing
 
             // reverse select
@@ -2027,18 +2077,18 @@ namespace nlsat {
             // end reverse
 
             // random select
-            if(m_dynamic_vars.size() >= num_vars()){
-                m_xk = null_var;
-            }
-            else {
-                m_xk = random_select();
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-                m_display_var(tout, m_xk);
-                tout << " (random)" << std::endl;
-                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
-            );
-            m_dynamic_vars.push_back(m_xk);
+            // if(m_dynamic_vars.size() >= num_vars()){
+            //     m_xk = null_var;
+            // }
+            // else {
+            //     m_xk = random_select();
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            //     m_display_var(tout, m_xk);
+            //     tout << " (random)" << std::endl;
+            //     tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end random
         }
 
@@ -2233,24 +2283,28 @@ namespace nlsat {
             }
             
             // wzh reorder static
-            if (!can_reorder()) {
+            /**
+             *  reorder may destroy our atom var cache
+            */
+           
+            // if (!can_reorder()) {
 
-            }
-            else if (m_random_order) {
-                shuffle_vars();
-                reordered = true;
-            }
-            else if (m_reorder) {
-                heuristic_reorder();
-                reordered = true;
-            }
-            TRACE("wzh", tout << "[dynamic] after reorder, show static order:\n";
-                for(var i = 0; i < num_vars(); i++){
-                    tout << "var: " << i << " ";
-                    m_display_var(tout, i);
-                    tout << std::endl;
-                }
-            );
+            // }
+            // else if (m_random_order) {
+            //     shuffle_vars();
+            //     reordered = true;
+            // }
+            // else if (m_reorder) {
+            //     heuristic_reorder();
+            //     reordered = true;
+            // }
+            // TRACE("wzh", tout << "[dynamic] after reorder, show static order:\n";
+            //     for(var i = 0; i < num_vars(); i++){
+            //         tout << "var: " << i << " ";
+            //         m_display_var(tout, i);
+            //         tout << std::endl;
+            //     }
+            // );
             // hzw reorder static
 
             // sort_watched_clauses();
@@ -2280,8 +2334,20 @@ namespace nlsat {
             // wzh dynamic
             m_find_stage.reset();
             m_find_stage.resize(num_vars() + 1, UINT_MAX);
+            // collect_var_atoms();
             // hzw dynamic
         }
+
+        // wzh dynamic
+        void collect_var_atoms(){
+            for(bool_var i = 0; i < m_bvalues.size(); i++){
+                var_vector curr_vars = get_vars_bool(i);
+                for(var v: curr_vars){
+                    m_var_atoms[v].push_back(i);
+                }
+            }
+        }
+        // hzw dynamic
 
         lbool check(literal_vector& assumptions) {
             literal_vector result;
