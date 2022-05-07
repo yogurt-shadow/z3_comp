@@ -133,11 +133,21 @@ namespace nlsat {
         // -----------------------
         var_vector m_dynamic_vars;
         var_vector m_find_stage;
+
         // bool_var ==> vars  pure bool_var ==> empty
         vector<var_vector> m_atom_vars;
         bool_vector m_atom_vars_cached;
         // arith_var ==> bool var
         vector<var_vector> m_var_atoms;
+        // bool_var ==> score
+        var_vector m_atom_score;
+
+        vector<var_vector> m_clause_vars;
+        bool_vector m_clause_vars_cached;
+        // arith_var ==> clauses
+        vector<var_vector> m_var_clauses;
+        // clause id ==> clause score
+        var_vector m_clause_score;
         // hzw dynamic
 
 
@@ -279,6 +289,12 @@ namespace nlsat {
             m_atom_vars.reset();
             m_atom_vars_cached.reset();
             m_var_atoms.reset();
+            m_atom_score.reset();
+
+            m_clause_vars.reset();
+            m_clause_vars_cached.reset();
+            m_var_clauses.reset();
+            m_clause_score.reset();
             // hzw dynamic
         }
         
@@ -329,6 +345,12 @@ namespace nlsat {
             m_atom_vars.reset();
             m_atom_vars_cached.reset();
             m_var_atoms.reset();
+            m_atom_score.reset();
+
+            m_clause_vars.reset();
+            m_clause_vars_cached.reset();
+            m_var_clauses.reset();
+            m_clause_score.reset();
             // hzw dynamic
         }
 
@@ -431,6 +453,62 @@ namespace nlsat {
             return out;
         }
 
+        std::ostream & display_atom_score(std::ostream & out) const {
+            out << "[dynamic] display atom scores:\n";
+            for(bool_var i = 0; i < m_atom_score.size(); i++){
+                out << "[dynamic] bool var " << i << " score: " << m_atom_score[i] << std::endl;
+            }
+            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_clause_score(std::ostream & out) const {
+            out << "[dynamic] display clause scores:\n";
+            for(bool_var i = 0; i < m_clause_score.size(); i++){
+                out << "[dynamic] clause " << i << " score: " << m_clause_score[i] << std::endl;
+            }
+            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_atom_vars(std::ostream & out) const {
+            out << "[dynamic] show vars for atoms\n";
+            for(bool_var i = 0; i < m_atom_vars.size(); i++){
+                if(m_atom_vars_cached[i]){
+                    out << "[dynamic] vars for bool_var " << i << ": " << std::endl;
+                    display_var_vector(out, m_atom_vars[i]);
+                }
+                else{
+                    out << "[dynamic] no memory for bool_var " << i << std::endl;
+                }
+            }
+            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_clause_vars(std::ostream & out) const {
+            out << "[dynamic] show vars for clauses\n";
+            for(bool_var i = 0; i < m_clauses.size(); i++){
+                if(m_clause_vars_cached[i]){
+                    out << "[dynamic] vars for clause " << i << ": " << std::endl;
+                    display_var_vector(out, m_clause_vars[i]);
+                }
+                else{
+                    out << "[dynamic] no memory for clause " << i << std::endl;
+                }
+            }
+            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_var_vector(std::ostream & out, var_vector const & vars) const {
+            for(var v: vars){
+                out << v << " ";
+            }
+            out << std::endl;
+            return out;
+        }
+
         // struct stage_info {
         //     var m_var;
         //     var m_stage;
@@ -468,6 +546,30 @@ namespace nlsat {
             for(unsigned i = 0; i < num; i++){
                 literal l = ls[i];
                 for(var v: get_vars_literal(l)){
+                    if(!res.contains(v)){
+                        res.push_back(v);
+                    }
+                }
+            }
+            return res;
+        }
+
+        var_vector get_vars_clause(unsigned i){
+            if(i >= m_clause_vars.size() || !m_clause_vars_cached[i]){
+                clause * cls = m_clauses[i];
+                var_vector m_vars = get_vars_clause_core(*cls);
+                m_clause_vars.setx(i, m_vars, var_vector(0));
+                m_clause_vars_cached.setx(i, true, false);
+            }
+            return m_clause_vars[i];
+        }
+
+        var_vector get_vars_clause_core(clause const & cls){
+            var_vector res;
+            for(unsigned i = 0; i < cls.size(); i++){ 
+                literal l = cls[i];
+                var_vector curr = get_vars_literal(l);
+                for(var v: curr){
                     if(!res.contains(v)){
                         res.push_back(v);
                     }
@@ -950,6 +1052,8 @@ namespace nlsat {
             // wzh dynamic
             m_atom_vars.setx(b, var_vector(0), var_vector(0));
             m_atom_vars_cached.setx(b, false, false);
+            m_atom_score.setx(b, UINT_MAX, UINT_MAX);
+            
             // hzw dynamic
             return b;
         }
@@ -973,6 +1077,7 @@ namespace nlsat {
             m_inv_perm.  push_back(x);
             // wzh dynamic
             m_var_atoms.push_back(var_vector(0));
+            m_var_clauses.push_back(var_vector(0));
             // hzw dynamic
             // SASSERT(m_is_int.size() == m_watches.size());
             SASSERT(m_is_int.size() == m_infeasible.size());
@@ -981,6 +1086,7 @@ namespace nlsat {
             SASSERT(m_is_int.size() == m_inv_perm.size());
             // wzh dynamic
             SASSERT(m_is_int.size() == m_var_atoms.size());
+            SASSERT(m_is_int.size() == m_var_clauses.size());
             // hzw dynamic
         }
 
@@ -1034,6 +1140,7 @@ namespace nlsat {
             // wzh dynamic
             m_atom_vars[b] = var_vector(0);
             m_atom_vars_cached[b] = false;
+            m_atom_score[b] = UINT_MAX;
             // hzw dynamic
         }
 
@@ -1131,35 +1238,11 @@ namespace nlsat {
                 m_atom_vars[b] = get_vars_ineq(atom);
                 m_atom_vars_cached[b] = true;
                 TRACE("wzh", display_atom_vars(tout););
+                m_atom_score[b] = m_atom_vars[b].size();
                 // hzw dynamic
                 return b;
             }
         }
-
-        // wzh dynamic
-        std::ostream & display_atom_vars(std::ostream & out) const {
-            out << "[dynamic] show vars for atoms\n";
-            for(bool_var i = 0; i < m_atom_vars.size(); i++){
-                if(m_atom_vars_cached[i]){
-                    out << "[dynamic] vars for bool_var " << i << ": " << std::endl;
-                    display_var_vector(out, m_atom_vars[i]);
-                }
-                else{
-                    out << "[dynamic] no memory for bool_var " << i << std::endl;
-                }
-            }
-            out << std::endl;
-            return out;
-        }
-
-        std::ostream & display_var_vector(std::ostream & out, var_vector const & vars) const {
-            for(var v: vars){
-                out << v << " ";
-            }
-            out << std::endl;
-            return out;
-        }
-        // hzw dynamic
 
         literal mk_ineq_literal(atom::kind k, unsigned sz, poly * const * ps, bool const * is_even) {
             SASSERT(k == atom::LT || k == atom::GT || k == atom::EQ);
@@ -1217,6 +1300,7 @@ namespace nlsat {
             TRACE("wzh", tout << "[debug] collect vars for root atom " << b << std::endl;);
             m_atom_vars[b] = get_vars_root(new_atom);
             m_atom_vars_cached[b] = true;
+            m_atom_score[b] = m_atom_vars[b].size();
             // hzw dynamic
             return b;
         }
@@ -1283,6 +1367,12 @@ namespace nlsat {
             del_clauses(m_clauses);
             del_clauses(m_learned);
             del_clauses(m_valids);
+            // wzh dynamic
+            m_clause_vars.reset();
+            m_clause_vars_cached.reset();
+            m_var_clauses.reset();
+            m_clause_score.reset();
+            // hzw dynamic
         }
 
         // We use a simple heuristic to sort literals
@@ -1476,8 +1566,15 @@ namespace nlsat {
             }
             if (learned)
                 m_learned.push_back(cls);
-            else
+            else{
                 m_clauses.push_back(cls);
+                unsigned index = m_clauses.size() - 1;
+                var_vector curr_vars = get_vars_clause(index);
+                m_clause_vars.setx(index, curr_vars, var_vector(0));
+            }
+            // wzh dynamic
+            
+            // hzw dynamic
             attach_clause(*cls);
             return cls;
         }
@@ -2034,6 +2131,11 @@ namespace nlsat {
             // }
             // hzw dynamic
             select_next_arith_var();
+            decrease_score();
+        }
+
+        void decrease_score(){
+
         }
 
         // wzh dynamic
@@ -2334,16 +2436,31 @@ namespace nlsat {
             // wzh dynamic
             m_find_stage.reset();
             m_find_stage.resize(num_vars() + 1, UINT_MAX);
-            // collect_var_atoms();
+            TRACE("wzh", tout << "[dynamic] enter collect var atoms" << std::endl;);
+            collect_var_infos();
+            TRACE("wzh", tout << "[dynamic] exit collect var atoms" << std::endl;);
+            
             // hzw dynamic
         }
 
         // wzh dynamic
-        void collect_var_atoms(){
+        void collect_var_infos(){
+            // reset
+            for(unsigned i = 0; i < m_var_atoms.size(); i++){
+                m_var_atoms[i].reset();
+                m_var_clauses[i].reset();
+            }
+
             for(bool_var i = 0; i < m_bvalues.size(); i++){
                 var_vector curr_vars = get_vars_bool(i);
                 for(var v: curr_vars){
                     m_var_atoms[v].push_back(i);
+                }
+            }
+            for(unsigned i = 0; i < m_clauses.size(); i++){
+                var_vector curr_vars = get_vars_clause(i);
+                for(var v: curr_vars){
+                    m_var_clauses[v].push_back(i);
                 }
             }
         }
