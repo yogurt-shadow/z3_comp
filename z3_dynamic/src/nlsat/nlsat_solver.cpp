@@ -144,10 +144,15 @@ namespace nlsat {
 
         vector<var_vector> m_clause_vars;
         bool_vector m_clause_vars_cached;
+
         // arith_var ==> clauses
         vector<var_vector> m_var_clauses;
         // clause id ==> clause score
         var_vector m_clause_score;
+
+        vector<var_vector> m_clause_watched_var;
+        vector<var_vector> m_var_unit_clauses;
+        vector<var_vector> m_var_watched_clauses;
         var_vector m_xclauses;
         // hzw dynamic
 
@@ -297,6 +302,10 @@ namespace nlsat {
             m_var_clauses.reset();
             m_clause_score.reset();
             m_xclauses.reset();
+
+            m_clause_watched_var.reset();
+            m_var_watched_clauses.reset();
+            m_var_unit_clauses.reset();
             // hzw dynamic
         }
         
@@ -354,6 +363,10 @@ namespace nlsat {
             m_var_clauses.reset();
             m_clause_score.reset();
             m_xclauses.reset();
+
+            m_clause_watched_var.reset();
+            m_var_watched_clauses.reset();
+            m_var_unit_clauses.reset();
             // hzw dynamic
         }
 
@@ -445,6 +458,40 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
+        // var find_watched_var(unsigned cls, var_vector const & vars){
+        //     for(var v: get_vars_clause(cls)){
+        //         if(vars.contains(v) || m_assignment.is_assigned(v)){
+        //             continue;
+        //         }
+        //         return v;
+        //     }
+        //     return UINT_MAX;
+        // }
+
+        // void change_watched_clauses(){
+        //     for(var cls: m_var_watched_clauses[m_xk]){
+        //         SASSERT(m_clause_watched_var[cls].contains(m_xk));
+        //         var other = other_var(m_clause_watched_var[cls], m_xk);
+        //         var next = find_watched_var(cls, m_clause_watched_var[cls]);
+        //         if(next == UINT_MAX){
+        //             // unit clause
+        //             m_var_unit_clauses[other].push_back(cls);
+        //             m_clause_watched_var[cls].reset();
+        //         }
+        //         else{
+        //             // before other next
+        //             m_clause_watched_var[cls] = {other, next};
+
+        //         }
+        //     }
+        //     m_var_watched_clauses[m_xk].reset();
+        // }
+
+        // var other_var(var_vector const & vars, var x){
+        //     SASSERT(vars.size() == 2);
+        //     return vars[0] == x ? vars[1] : vars[0];
+        // }
+
         std::ostream & display_dynamic(std::ostream & out) const {
             out << "[dynamic] show dynamic vars:\n";
             for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
@@ -465,12 +512,58 @@ namespace nlsat {
             return out;
         }
 
-        std::ostream & display_clause_score(std::ostream & out) const {
-            out << "[dynamic] display clause scores:\n";
-            for(bool_var i = 0; i < m_clause_score.size(); i++){
-                out << "[dynamic] clause " << i << " score: " << m_clause_score[i] << std::endl;
+        // std::ostream & display_clause_score(std::ostream & out) const {
+        //     out << "[dynamic] display clause scores:\n";
+        //     for(bool_var i = 0; i < m_clause_score.size(); i++){
+        //         out << "[dynamic] clause " << i << " score: " << m_clause_score[i] << std::endl;
+        //     }
+        //     out << std::endl;
+        //     return out;
+        // }
+
+        // here unit clauses means unit to arith_var
+        std::ostream & display_unit_clauses(std::ostream & out) const {
+            out << "[dynamic] display unit clauses:\n";
+            for(var i = 0; i < m_var_unit_clauses.size(); i++){
+                out << "[dynamic] var " << i << " ";
+                m_display_var(out, i);
+                out << std::endl;
+                for(unsigned v: m_var_unit_clauses[i]){
+                    out << "clause " << v << std::endl;
+                    display(out, m_clauses[v]);
+                    out << std::endl;
+                }
             }
-            out << std::endl;
+            return out;
+        }
+
+        std::ostream & display_watched_clauses(std::ostream & out) const {
+            out << "[dynamic] display watched clauses for vars\n";
+            for(var i = 0; i < m_var_watched_clauses.size(); i++){
+                out << "[dynamic] var " << i << " ";
+                m_display_var(out, i);
+                out << std::endl;
+                for(unsigned v: m_var_unit_clauses[i]){
+                    out << "clause " << v << std::endl;
+                    display(out, m_clauses[v]);
+                    out << std::endl;
+                }
+            }
+            return out;
+        }
+
+        std::ostream & display_watched_vars(std::ostream & out) const {
+            out << "[dynamic] display watched vars for clauses\n";
+            for(unsigned i = 0; i < m_clause_watched_var.size(); i++){
+                out << "[dynamic] clause " << i << std::endl;
+                display(out, m_clauses[i]);
+                out << std::endl;
+                for(var v: m_clause_watched_var[i]){
+                    out << v << " ";
+                    m_display_var(out, v);
+                }
+                out << std::endl;
+            }
             return out;
         }
 
@@ -489,12 +582,35 @@ namespace nlsat {
             return out;
         }
 
+        // std::ostream & display_var_clauses(std::ostream & out) const {
+        //     out << "[dynamic] show clauses for var: \n";
+        //     for(unsigned i = 0; i < m_var_clauses.size(); i++){
+        //         out << "[dynamic] current var " << i << " ";
+        //         m_display_var(out, i);
+        //         out << std::endl;
+        //         display_clauses(out, m_var_clauses[i]);
+        //     }
+        //     return out;
+        // }
+
+        std::ostream & display_clauses(std::ostream & out, var_vector const & cls) const {
+            for(var i: cls){
+                clause * c = m_clauses[i];
+                display(out, c);
+                out << std::endl;
+            }
+            return out;
+        }
+
         std::ostream & display_clause_vars(std::ostream & out) const {
             out << "[dynamic] show vars for clauses\n";
             for(bool_var i = 0; i < m_clauses.size(); i++){
                 if(m_clause_vars_cached[i]){
                     out << "[dynamic] vars for clause " << i << ": " << std::endl;
+                    display(out, m_clauses[i]);
+                    out << std::endl;
                     display_var_vector(out, m_clause_vars[i]);
+                    out << std::endl;
                 }
                 else{
                     out << "[dynamic] no memory for clause " << i << std::endl;
@@ -603,6 +719,7 @@ namespace nlsat {
                 display_var_vector(tout, m_atom_vars[b]);
             );
             return m_atom_vars[b];
+            // return get_vars_atom(m_atoms[b]);
             // hzw cache
         }
 
@@ -967,6 +1084,9 @@ namespace nlsat {
             for(var v: m_xclauses){
                 res.push_back(m_clauses[v]);
             }
+            // for(var v: m_var_unit_clauses[x]){
+            //     res.push_back(m_clauses[v]);
+            // }
             for(clause * cls: m_learned){
                 if(only_left_clause(*cls, x)){
                     res.push_back(cls);
@@ -1083,7 +1203,9 @@ namespace nlsat {
             m_inv_perm.  push_back(x);
             // wzh dynamic
             m_var_atoms.push_back(var_vector(0));
-            m_var_clauses.push_back(var_vector(0));
+            // m_var_clauses.push_back(var_vector(0));
+
+            m_var_watched_clauses.push_back(var_vector(0));
             // hzw dynamic
             // SASSERT(m_is_int.size() == m_watches.size());
             SASSERT(m_is_int.size() == m_infeasible.size());
@@ -1092,7 +1214,8 @@ namespace nlsat {
             SASSERT(m_is_int.size() == m_inv_perm.size());
             // wzh dynamic
             SASSERT(m_is_int.size() == m_var_atoms.size());
-            SASSERT(m_is_int.size() == m_var_clauses.size());
+            // SASSERT(m_is_int.size() == m_var_clauses.size());
+            SASSERT(m_is_int.size() == m_var_watched_clauses.size());
             // hzw dynamic
         }
 
@@ -1370,14 +1493,18 @@ namespace nlsat {
         }
 
         void del_clauses() {
+            TRACE("wzh", tout << "enter delete clauses\n";);
             del_clauses(m_clauses);
             del_clauses(m_learned);
             del_clauses(m_valids);
             // wzh dynamic
             m_clause_vars.reset();
             m_clause_vars_cached.reset();
-            m_var_clauses.reset();
-            m_clause_score.reset();
+            // m_var_clauses.reset();
+            // m_clause_score.reset();
+            m_clause_vars.reset();
+            m_var_unit_clauses.reset();
+            m_var_watched_clauses.reset();
             // hzw dynamic
         }
 
@@ -1576,10 +1703,10 @@ namespace nlsat {
                 m_clauses.push_back(cls);
                 unsigned index = m_clauses.size() - 1;
                 TRACE("wzh", tout << "[dynamic] collect vars for clause " << index << std::endl;);
-                var_vector curr_vars = get_vars_clause(index);
-                m_clause_vars.setx(index, curr_vars, var_vector(0));
-                m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
-                SASSERT(m_clauses.size() == m_clause_vars.size());
+                // var_vector curr_vars = get_vars_clause(index);
+                // m_clause_vars.setx(index, curr_vars, var_vector(0));
+                // m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
+                // SASSERT(m_clauses.size() == m_clause_vars.size());
             }
             // wzh dynamic
             
@@ -1669,6 +1796,7 @@ namespace nlsat {
             else{
                 m_xk = m_dynamic_vars.back();
                 m_assignment.reset(m_xk);
+
             }
             // hzw dynamic
         }
@@ -2178,7 +2306,9 @@ namespace nlsat {
                 }
             }
             TRACE("wzh", display_dynamic(tout););
-            TRACE("wzh", tout << "[debug] show xclauses for m_xk " << m_xk << ":\n";
+            TRACE("wzh", tout << "[debug] show xclauses for m_xk " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << ":\n";
                 for(var v: m_xclauses){
                     display(tout, m_clauses[v]);
                     tout << std::endl;
@@ -2189,6 +2319,7 @@ namespace nlsat {
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
+            // TRACE("wzh", std::cout << "increasing" << std::endl;);
             if(m_xk == null_var){
                 m_xk = 0;
             }
@@ -2209,6 +2340,7 @@ namespace nlsat {
             // end increasing
 
             // reverse select
+            // TRACE("wzh", std::cout << "decreasing" << std::endl;);
             // if(m_dynamic_vars.size() >= num_vars()){
             //     m_xk = null_var;
             // }
@@ -2226,6 +2358,7 @@ namespace nlsat {
             // end reverse
 
             // random select
+            // TRACE("wzh", std::cout << "random" << std::endl;);
             // if(m_dynamic_vars.size() >= num_vars()){
             //     m_xk = null_var;
             // }
@@ -2340,9 +2473,6 @@ namespace nlsat {
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
-                        TRACE("wzh", tout << "[dynamic] show max var clauses:\n";
-
-                        );
                         conflict_clause = process_clauses(clauses);
                     }
                     if (conflict_clause == nullptr)
@@ -2365,6 +2495,9 @@ namespace nlsat {
                         tout << std::endl;
                     );
                     select_witness();
+                    // wzh dynamic
+                    // change_watched_clauses();
+                    // hzw dynamic
                 }
             }
         }
@@ -2433,6 +2566,14 @@ namespace nlsat {
                 if (!simplify()) 
                     return l_false;
             }
+
+            // clause index may be changed after simplify
+            TRACE("wzh", tout << "[dynamic] enter collect var atoms" << std::endl;);
+            collect_var_infos();
+            TRACE("wzh", tout << "[dynamic] exit collect var atoms" << std::endl;);
+            TRACE("wzh", tout << "[dynamic] show clauses:\n";
+                display_all_clauses(tout);
+            );
             
             // wzh reorder static
             /**
@@ -2486,19 +2627,25 @@ namespace nlsat {
             // wzh dynamic
             m_find_stage.reset();
             m_find_stage.resize(num_vars() + 1, UINT_MAX);
-            TRACE("wzh", tout << "[dynamic] enter collect var atoms" << std::endl;);
-            collect_var_infos();
-            TRACE("wzh", tout << "[dynamic] exit collect var atoms" << std::endl;);
-            
             // hzw dynamic
         }
 
         // wzh dynamic
+        std::ostream & display_all_clauses(std::ostream & out) const {
+            out << "show all clauses:\n";
+            for(unsigned i = 0; i < m_clauses.size(); i++){
+                out << i << std::endl;
+                display(out, m_clauses[i]);
+                out << std::endl;
+            }
+            return out;
+        }
+
         void collect_var_infos(){
             // reset
             for(unsigned i = 0; i < m_var_atoms.size(); i++){
                 m_var_atoms[i].reset();
-                m_var_clauses[i].reset();
+                // m_var_clauses[i].reset();
             }
 
             for(bool_var i = 0; i < m_bvalues.size(); i++){
@@ -2509,10 +2656,27 @@ namespace nlsat {
             }
             for(unsigned i = 0; i < m_clauses.size(); i++){
                 var_vector curr_vars = get_vars_clause(i);
-                for(var v: curr_vars){
-                    m_var_clauses[v].push_back(i);
+                // for(var v: curr_vars){
+                //     m_var_clauses[v].push_back(i);
+                // }
+                // m_clause_score.setx(i, curr_vars.size(), UINT_MAX);
+                if(curr_vars.empty()){
+                    continue;
+                }
+                if(curr_vars.size() == 1){
+                    m_var_unit_clauses[curr_vars[0]].push_back(i);
+                }
+                else{
+                    m_clause_watched_var[i] = {curr_vars[0], curr_vars[1]};
+                    m_var_watched_clauses[curr_vars[0]].push_back(i);
+                    m_var_watched_clauses[curr_vars[1]].push_back(i);
                 }
             }
+            TRACE("wzh", display_clause_vars(tout););
+            // TRACE("wzh", display_var_clauses(tout););
+            TRACE("wzh", display_watched_clauses(tout));
+            TRACE("wzh", display_watched_vars(tout));
+            TRACE("wzh", display_unit_clauses(tout));
         }
         // hzw dynamic
 
