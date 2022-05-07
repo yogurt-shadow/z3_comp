@@ -148,6 +148,7 @@ namespace nlsat {
         vector<var_vector> m_var_clauses;
         // clause id ==> clause score
         var_vector m_clause_score;
+        var_vector m_xclauses;
         // hzw dynamic
 
 
@@ -295,6 +296,7 @@ namespace nlsat {
             m_clause_vars_cached.reset();
             m_var_clauses.reset();
             m_clause_score.reset();
+            m_xclauses.reset();
             // hzw dynamic
         }
         
@@ -351,6 +353,7 @@ namespace nlsat {
             m_clause_vars_cached.reset();
             m_var_clauses.reset();
             m_clause_score.reset();
+            m_xclauses.reset();
             // hzw dynamic
         }
 
@@ -956,10 +959,13 @@ namespace nlsat {
 
         clause_vector find_max_var(var x){
             clause_vector res;
-            for(clause * cls: m_clauses){
-                if(only_left_clause(*cls, x)){
-                    res.push_back(cls);
-                }
+            // for(clause * cls: m_clauses){
+            //     if(only_left_clause(*cls, x)){
+            //         res.push_back(cls);
+            //     }
+            // }
+            for(var v: m_xclauses){
+                res.push_back(m_clauses[v]);
             }
             for(clause * cls: m_learned){
                 if(only_left_clause(*cls, x)){
@@ -1569,8 +1575,11 @@ namespace nlsat {
             else{
                 m_clauses.push_back(cls);
                 unsigned index = m_clauses.size() - 1;
+                TRACE("wzh", tout << "[dynamic] collect vars for clause " << index << std::endl;);
                 var_vector curr_vars = get_vars_clause(index);
                 m_clause_vars.setx(index, curr_vars, var_vector(0));
+                m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
+                SASSERT(m_clauses.size() == m_clause_vars.size());
             }
             // wzh dynamic
             
@@ -1650,6 +1659,7 @@ namespace nlsat {
                 tout << std::endl;
             );
             m_dynamic_vars.pop_back();
+            increase_score();
             if(curr != null_var){
                 m_find_stage[curr] = UINT_MAX;
             }
@@ -2134,11 +2144,48 @@ namespace nlsat {
             decrease_score();
         }
 
-        void decrease_score(){
-
+        // wzh dynamic
+        void increase_score(){
+            m_xclauses.reset();
+            if(m_xk == null_var){
+                return;
+            }
+            for(bool_var b: m_var_atoms[m_xk]){
+                SASSERT(m_atom_score[b] >= 0);
+                m_atom_score[b]++;
+            }
+            for(unsigned cls: m_var_clauses[m_xk]){
+                SASSERT(m_clause_score[cls] >= 0);
+                m_clause_score[cls]++;
+            }
         }
 
-        // wzh dynamic
+
+        void decrease_score(){
+            m_xclauses.reset();
+            if(m_xk == null_var){
+                return;
+            }
+            for(bool_var b: m_var_atoms[m_xk]){
+                SASSERT(m_atom_score[b] > 0);
+                m_atom_score[b]--;
+            }
+            for(unsigned cls: m_var_clauses[m_xk]){
+                SASSERT(m_clause_score[cls] > 0);
+                m_clause_score[cls]--;
+                if(m_clause_score[cls] == 0){
+                    m_xclauses.push_back(cls);
+                }
+            }
+            TRACE("wzh", display_dynamic(tout););
+            TRACE("wzh", tout << "[debug] show xclauses for m_xk " << m_xk << ":\n";
+                for(var v: m_xclauses){
+                    display(tout, m_clauses[v]);
+                    tout << std::endl;
+                }
+            );
+        }
+
         // arith var heuristic
         void select_next_arith_var(){
             // origin increasing arith order
@@ -2293,6 +2340,9 @@ namespace nlsat {
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
+                        TRACE("wzh", tout << "[dynamic] show max var clauses:\n";
+
+                        );
                         conflict_clause = process_clauses(clauses);
                     }
                     if (conflict_clause == nullptr)
