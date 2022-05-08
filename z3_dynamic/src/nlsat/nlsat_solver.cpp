@@ -672,15 +672,17 @@ namespace nlsat {
 
         var max_stage_lts(unsigned sz, literal const * cls) {
             var x      = 0;
+            bool all_bool = true;
             for (unsigned i = 0; i < sz; i++) {
                 literal l = cls[i];
                 if (is_arith_literal(l)) {
+                    all_bool = false;
                     var y = max_stage_literal(l);
                     if (x == 0 || y > x)
                         x = y;
                 }
             }
-            return x;
+            return all_bool ? null_var : x;
         }
 
         var max_stage_literal(literal l) {
@@ -801,38 +803,38 @@ namespace nlsat {
         //     return contain;
         // }
 
-        bool contains_bool(bool_var b, var x) const {
+        bool contains_bool(bool_var b, var x) {
             // if(!is_arith_atom(b)){
             //     return false;
             // }
-            return is_arith_atom(b) ? contains_atom(m_atoms[b], x) : false;
+            var_vector curr_vars = get_vars_bool(b);
+            return curr_vars.contains(x);
         }
 
-        bool contains_atom(atom const * a, var x) const {
+        bool contains_atom(atom const * a, var x) {
             // if(a == nullptr){
             //     return false;
             // }
-            return a == nullptr ? false : 
-                                (a->is_ineq_atom() ? contains_ineq(to_ineq_atom(a), x) : 
-                                                     contains_root(to_root_atom(a), x));
+            var_vector curr_vars = get_vars_bool(a->bvar());
+            return curr_vars.contains(x);
         }
 
-        bool contains_ineq(ineq_atom const * a, var x) const {
-            for(unsigned i = 0; i < a->size(); i++){
-                var_vector curr;
-                m_pm.vars(a->p(i), curr);
-                if(curr.contains(x)){
-                    return true;
-                }
-            }
-            return false;
-        }
+        // bool contains_ineq(ineq_atom const * a, var x) const {
+        //     for(unsigned i = 0; i < a->size(); i++){
+        //         var_vector curr;
+        //         m_pm.vars(a->p(i), curr);
+        //         if(curr.contains(x)){
+        //             return true;
+        //         }
+        //     }
+        //     return false;
+        // }
 
-        bool contains_root(root_atom const * a, var x) const {
-            var_vector curr;
-            m_pm.vars(a->p(), curr);
-            return curr.contains(x) || a->x() == x;
-        }
+        // bool contains_root(root_atom const * a, var x) const {
+        //     var_vector curr;
+        //     m_pm.vars(a->p(), curr);
+        //     return curr.contains(x) || a->x() == x;
+        // }
 
         bool all_bool_clause(clause const & cls) const {
             for(unsigned i = 0; i < cls.size(); i++){
@@ -846,7 +848,7 @@ namespace nlsat {
 
         // at least one literal is only left
         // other literal is all assigned
-        bool only_left_clause(clause const & cls, var x) const {
+        bool only_left_clause(clause const & cls, var x) {
             bool have_only = false;
             for(unsigned i = 0; i < cls.size(); i++){
                 literal l = cls[i];
@@ -862,7 +864,7 @@ namespace nlsat {
             return have_only;
         }
 
-        bool only_left_poly(poly const * p, var x) const {
+        bool only_left_poly(poly const * p, var x) {
             var_vector curr_vars;
             m_pm.vars(p, curr_vars);
             if(!curr_vars.contains(x)){
@@ -879,46 +881,35 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left_atom(atom const * a, var x) const {
+        bool only_left_atom(atom const * a, var x) {
             return a->is_ineq_atom() ? only_left_ineq(to_ineq_atom(a), x) : only_left_and_ordered_root(to_root_atom(a), x);
         }
 
-        bool only_left_ineq(ineq_atom const * a, var x) const {
-            SASSERT(m_assignment.is_assigned(x));
-            var_vector curr_vars;
-            for(unsigned i = 0; i < a->size(); i++){
-                var_vector curr;
-                m_pm.vars(a->p(i), curr);
-                for(var v: curr){
-                    if(!curr_vars.contains(v)){
-                        curr_vars.push_back(v);
-                    }
-                }
-            }
-            if(!curr_vars.contains(x)){
-                return false;
-            }
+        bool only_left_ineq(ineq_atom const * a, var x) {
+            bool contains = false;
+            var_vector curr_vars = get_vars_bool(a->bvar());
             for(var v: curr_vars){
+                if(v == x){
+                    contains = true;
+                    continue;
+                }
                 if(!m_assignment.is_assigned(v)){
-                    if(v != x){
-                        return false;
-                    }
+                    return false;
                 }
             }
-            return true;
+            return contains;
         }
 
-        bool only_left_and_ordered_root(root_atom const * a, var x) const {
+        bool only_left_and_ordered_root(root_atom const * a, var x) {
             SASSERT(!m_assignment.is_assigned(x));
             // if we do not leave only x(), disable this atom
             if(a->x() != x){
                 return false;
             }
-            var_vector curr_vars;
-            m_pm.vars(a->p(), curr_vars);
+            var_vector curr_vars = get_vars_bool(a->bvar());
             for(var v: curr_vars){
                 if(v == x){
-                    continue;;
+                    continue;
                 }
                 if(!m_assignment.is_assigned(v)){
                     return false;
@@ -927,41 +918,24 @@ namespace nlsat {
             return true;
         }
 
-        bool only_left_bool(bool_var b, var x) const {
+        bool only_left_bool(bool_var b, var x) {
             return is_arith_atom(b) ? only_left_atom(m_atoms[b], x) : false;
         }
 
-        bool only_left_literal(literal l, var x) const {
+        bool only_left_literal(literal l, var x) {
             return only_left_bool(l.var(), x);
         }
 
-        bool all_assigned_literal(literal l) const {
+        bool all_assigned_literal(literal l) {
             // if(!is_arith_literal(l)){
             //     return true;
             // }
-            // return all_assigned_bool(l.var());
-            return is_arith_literal(l) ? all_assigned_bool(l.var()) : true;
+            // return is_arith_literal(l) ? all_assigned_bool(l.var()) : true;
+            return all_assigned_bool(l.var());
         }
 
-        bool all_assigned_bool(bool_var b) const {
-            return all_assigned_atom(m_atoms[b]);
-        }
-
-        bool all_assigned_atom(atom const * a) const {
-            return a->is_ineq_atom() ? all_assigned_ineq(to_ineq_atom(a)) : all_assigned_root(to_root_atom(a));
-        }
-
-        bool all_assigned_ineq(ineq_atom const * a) const {
-            var_vector curr_vars;
-            for(unsigned i = 0; i < a->size(); i++){
-                var_vector curr;
-                m_pm.vars(a->p(i), curr);
-                for(var v: curr){
-                    if(!curr_vars.contains(v)){
-                        curr_vars.push_back(v);
-                    }
-                }
-            }
+        bool all_assigned_bool(bool_var b)  {
+            var_vector curr_vars = get_vars_bool(b);
             for(var v: curr_vars){
                 if(!m_assignment.is_assigned(v)){
                     return false;
@@ -970,27 +944,50 @@ namespace nlsat {
             return true;
         }
 
-        bool all_assigned_root(root_atom const * a) const {
-            var_vector curr_vars;
-            m_pm.vars(a->p(), curr_vars);
-            for(var v: curr_vars){
-                if(!m_assignment.is_assigned(v)){
-                    return false;
-                }
-            }
-            return m_assignment.is_assigned(a->m_x);
-        }
+        // bool all_assigned_atom(atom const * a) const {
+        //     return a->is_ineq_atom() ? all_assigned_ineq(to_ineq_atom(a)) : all_assigned_root(to_root_atom(a));
+        // }
+
+        // bool all_assigned_ineq(ineq_atom const * a) const {
+        //     var_vector curr_vars;
+        //     for(unsigned i = 0; i < a->size(); i++){
+        //         var_vector curr;
+        //         m_pm.vars(a->p(i), curr);
+        //         for(var v: curr){
+        //             if(!curr_vars.contains(v)){
+        //                 curr_vars.push_back(v);
+        //             }
+        //         }
+        //     }
+        //     for(var v: curr_vars){
+        //         if(!m_assignment.is_assigned(v)){
+        //             return false;
+        //         }
+        //     }
+        //     return true;
+        // }
+
+        // bool all_assigned_root(root_atom const * a) const {
+        //     var_vector curr_vars;
+        //     m_pm.vars(a->p(), curr_vars);
+        //     for(var v: curr_vars){
+        //         if(!m_assignment.is_assigned(v)){
+        //             return false;
+        //         }
+        //     }
+        //     return m_assignment.is_assigned(a->m_x);
+        // }
 
         clause_vector find_max_var(var x){
             clause_vector res;
-            // for(clause * cls: m_clauses){
-            //     if(only_left_clause(*cls, x)){
-            //         res.push_back(cls);
-            //     }
-            // }
-            for(var v: m_xclauses){
-                res.push_back(m_clauses[v]);
+            for(clause * cls: m_clauses){
+                if(only_left_clause(*cls, x)){
+                    res.push_back(cls);
+                }
             }
+            // for(var v: m_xclauses){
+            //     res.push_back(m_clauses[v]);
+            // }
             for(clause * cls: m_learned){
                 if(only_left_clause(*cls, x)){
                     res.push_back(cls);
@@ -1601,10 +1598,10 @@ namespace nlsat {
                 m_clauses.push_back(cls);
                 unsigned index = m_clauses.size() - 1;
                 TRACE("wzh", tout << "[dynamic] collect vars for clause " << index << std::endl;);
-                // var_vector curr_vars = get_vars_clause(index);
-                // m_clause_vars.setx(index, curr_vars, var_vector(0));
-                // m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
-                // SASSERT(m_clauses.size() == m_clause_vars.size());
+                var_vector curr_vars = get_vars_clause(index);
+                m_clause_vars.setx(index, curr_vars, var_vector(0));
+                m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
+                SASSERT(m_clauses.size() == m_clause_vars.size());
             }
             // wzh dynamic
             
@@ -1684,7 +1681,7 @@ namespace nlsat {
                 tout << std::endl;
             );
             m_dynamic_vars.pop_back();
-            increase_score();
+            // increase_score();
             if(curr != null_var){
                 m_find_stage[curr] = UINT_MAX;
             }
@@ -1871,7 +1868,7 @@ namespace nlsat {
             }
             // var max = a->max_var();
             // if (!m_assignment.is_assigned(max)) {
-            if(!all_assigned_atom(a)){
+            if(!all_assigned_bool(b)){
                 TRACE("wzh", display(tout << "[dynamic] not all assigned ", l) << "\n";);
                 TRACE("wzh", display_assignment(tout););
                 return l_undef;
@@ -2166,7 +2163,7 @@ namespace nlsat {
             // }
             // hzw dynamic
             select_next_arith_var();
-            decrease_score();
+            // decrease_score();
         }
 
         // wzh dynamic
@@ -2466,7 +2463,7 @@ namespace nlsat {
 
             // clause index may be changed after simplify
             TRACE("wzh", tout << "[dynamic] enter collect var atoms" << std::endl;);
-            collect_var_infos();
+            // collect_var_infos();
             TRACE("wzh", tout << "[dynamic] exit collect var atoms" << std::endl;);
             TRACE("wzh", tout << "[dynamic] show clauses:\n";
                 display_all_clauses(tout);
@@ -4718,6 +4715,4 @@ namespace nlsat {
     void solver::collect_statistics(statistics & st) {
         return m_imp->collect_statistics(st);
     }
-
-
 };
