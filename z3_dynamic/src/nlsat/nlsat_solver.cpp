@@ -714,11 +714,22 @@ namespace nlsat {
         }
 
         var max_stage_ineq(ineq_atom const * a) {
+            // var res = 0;
+            // for(unsigned i = 0; i < a->size(); i++){
+            //     var curr = max_stage_poly(a->p(i));
+            //     if(res == 0 || curr > res){
+            //         res = curr;
+            //     }
+            // }
             var res = 0;
-            for(unsigned i = 0; i < a->size(); i++){
-                var curr = max_stage_poly(a->p(i));
+            var_vector curr_vars = get_vars_bool(a->bvar());
+            for(var v: curr_vars){
+                var curr = find_stage(v);
                 if(res == 0 || curr > res){
                     res = curr;
+                    if(res == UINT_MAX){
+                        return UINT_MAX;
+                    }
                 }
             }
             return res;
@@ -738,16 +749,25 @@ namespace nlsat {
         }
 
         var max_stage_root(root_atom const * a) {
-            var p_stage = max_stage_poly(a->p());
-            var x_stage = find_stage(a->x());
-            return p_stage > x_stage ? p_stage : x_stage;
+            var res = 0;
+            var_vector curr_vars = get_vars_bool(a->bvar());
+            for(var v: curr_vars){
+                var curr = find_stage(v);
+                if(res == 0 || curr > res){
+                    res = curr;
+                    if(res == UINT_MAX){
+                        return UINT_MAX;
+                    }
+                }
+            }
+            return res;
         }
 
         var find_stage(var x) {
             if(x == null_var){
                 return UINT_MAX;
             }
-            if(m_find_stage[x] != UINT_MAX){
+            if(x < m_find_stage.size() && m_find_stage[x] != UINT_MAX){
                 return m_find_stage[x];
             }
             for(unsigned i = 0; i < m_dynamic_vars.size(); i++){
@@ -1431,15 +1451,16 @@ namespace nlsat {
                     return true;
                 if (a2 == nullptr)
                     return false;
-                // var x1 = a1->max_var();
-                // var x2 = a2->max_var();
+                // var x1 = m.max_stage_literal(l1);
+                // var x2 = m.max_stage_literal(l2);
+                // TRACE("wzh", tout << "x1: " << x1 << "  x2: " << x2 << std::endl;);
                 // if (x1 < x2)
                 //     return true;
                 // if (x1 > x2)
                 //     return false;
                 // SASSERT(x1 == x2);
-                // unsigned d1 = m.degree(a1);
-                // unsigned d2 = m.degree(a2);
+                // unsigned d1 = m.degree_dynamic(a1, x1);
+                // unsigned d2 = m.degree_dynamic(a2, x2);
                 // if (d1 < d2)
                 //     return true;
                 // if (d1 > d2)
@@ -1594,8 +1615,9 @@ namespace nlsat {
             clause * cls = mk_clause_core(num_lits, lits, learned, a);
             ++m_lemma_count;
             TRACE("nlsat_sort", display(tout << "mk_clause:\n", *cls) << "\n";);
-            std::sort(cls->begin(), cls->end(), lit_lt(*this));
-            TRACE("nlsat_sort", display(tout << "#" << m_lemma_count << " after sort:\n", *cls) << "\n";);
+            // TRACE("wzh", tout << "[dynamic] sort clause" << std::endl;);
+            // std::sort(cls->begin(), cls->end(), lit_lt(*this));
+            // TRACE("nlsat_sort", display(tout << "#" << m_lemma_count << " after sort:\n", *cls) << "\n";);
             if (learned && m_log_lemmas) {
                 log_lemma(verbose_stream(), *cls);
             }
@@ -3585,7 +3607,14 @@ namespace nlsat {
         unsigned_vector m_cs_p;
 
         void sort_dynamic_clauses(clause_vector & cls, var x) {
+            // wzh sort clause
             sort_clauses_by_degree_dynamic(cls.size(), cls.data(), x);
+            // hzw sort clause
+            // wzh sort literal
+            for(clause * c: cls){
+                std::sort(c->begin(), c->end(), lit_lt(*this));
+            }
+            // hzw sort litera;
         }
 
         void sort_clauses_by_degree_dynamic(unsigned sz, clause ** cs, var x) {
