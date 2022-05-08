@@ -610,21 +610,21 @@ namespace nlsat {
 
         var_vector get_vars_bool(bool_var b) {
             // wzh cache
-            TRACE("wzh", tout << "[debug] enter get vars bool for " << b << std::endl;
-                display_atom(tout, b);
-                tout << std::endl;
-            );
+            // TRACE("wzh", tout << "[debug] enter get vars bool for " << b << std::endl;
+                // display_atom(tout, b);
+                // tout << std::endl;
+            // );
             if(!m_atom_vars_cached[b]){
-                TRACE("wzh", tout << "[debug] no cache for bool var" << std::endl;);
+                // TRACE("wzh", tout << "[debug] no cache for bool var" << std::endl;);
                 m_atom_vars_cached[b] = true;
                 m_atom_vars[b] = get_vars_atom(m_atoms[b]);
             }
             else{
-                TRACE("wzh", tout << "[debug] cached bool var" << std::endl;);
+                // TRACE("wzh", tout << "[debug] cached bool var" << std::endl;);
             }
-            TRACE("wzh", tout << "[debug] display vars: " << std::endl;
-                display_var_vector(tout, m_atom_vars[b]);
-            );
+            // TRACE("wzh", tout << "[debug] display vars: " << std::endl;
+                // display_var_vector(tout, m_atom_vars[b]);
+            // );
             return m_atom_vars[b];
             // return get_vars_atom(m_atoms[b]);
             // hzw cache
@@ -670,16 +670,18 @@ namespace nlsat {
         //     return m_xk != _a->x();
         // }
 
+        // 
         var max_stage_lts(unsigned sz, literal const * cls) {
             var x      = 0;
             bool all_bool = true;
             for (unsigned i = 0; i < sz; i++) {
                 literal l = cls[i];
                 if (is_arith_literal(l)) {
-                    all_bool = false;
                     var y = max_stage_literal(l);
-                    if (x == 0 || y > x)
+                    if (x == 0 || y > x){
                         x = y;
+                    }
+                    all_bool = false;
                 }
             }
             return all_bool ? null_var : x;
@@ -1264,7 +1266,7 @@ namespace nlsat {
                 TRACE("wzh", tout << "[debug] collect vars for ineq atom " << b << std::endl;);
                 m_atom_vars[b] = get_vars_ineq(atom);
                 m_atom_vars_cached[b] = true;
-                TRACE("wzh", display_atom_vars(tout););
+                // TRACE("wzh", display_atom_vars(tout););
                 m_atom_score[b] = m_atom_vars[b].size();
                 // hzw dynamic
                 return b;
@@ -1870,7 +1872,7 @@ namespace nlsat {
             // if (!m_assignment.is_assigned(max)) {
             if(!all_assigned_bool(b)){
                 TRACE("wzh", display(tout << "[dynamic] not all assigned ", l) << "\n";);
-                TRACE("wzh", display_assignment(tout););
+                // TRACE("wzh", display_assignment(tout););
                 return l_undef;
             }
             val = to_lbool(m_evaluator.eval(a, l.sign()));
@@ -2367,9 +2369,6 @@ namespace nlsat {
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
-                        TRACE("wzh", tout << "[dynamic] show max var clauses:\n";
-
-                        );
                         conflict_clause = process_clauses(clauses);
                     }
                     if (conflict_clause == nullptr)
