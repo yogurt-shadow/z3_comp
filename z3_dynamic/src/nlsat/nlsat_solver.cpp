@@ -1451,24 +1451,24 @@ namespace nlsat {
                     return true;
                 if (a2 == nullptr)
                     return false;
-                // var x1 = m.max_stage_literal(l1);
-                // var x2 = m.max_stage_literal(l2);
+                var x1 = m.max_stage_literal(l1);
+                var x2 = m.max_stage_literal(l2);
                 // TRACE("wzh", tout << "x1: " << x1 << "  x2: " << x2 << std::endl;);
-                // if (x1 < x2)
-                //     return true;
-                // if (x1 > x2)
-                //     return false;
-                // SASSERT(x1 == x2);
-                // unsigned d1 = m.degree_dynamic(a1, x1);
-                // unsigned d2 = m.degree_dynamic(a2, x2);
-                // if (d1 < d2)
-                //     return true;
-                // if (d1 > d2)
-                //     return false;
-                // if (!a1->is_eq() && a2->is_eq())
-                //     return true;
-                // if (a1->is_eq() && !a2->is_eq())
-                //     return false;
+                if (x1 < x2)
+                    return true;
+                if (x1 > x2)
+                    return false;
+                SASSERT(x1 == x2);
+                unsigned d1 = m.degree_dynamic_atom(a1);
+                unsigned d2 = m.degree_dynamic_atom(a2);
+                if (d1 < d2)
+                    return true;
+                if (d1 > d2)
+                    return false;
+                if (!a1->is_eq() && a2->is_eq())
+                    return true;
+                if (a1->is_eq() && !a2->is_eq())
+                    return false;
                 return l1.index() < l2.index();
             }
         };
@@ -1615,9 +1615,9 @@ namespace nlsat {
             clause * cls = mk_clause_core(num_lits, lits, learned, a);
             ++m_lemma_count;
             TRACE("nlsat_sort", display(tout << "mk_clause:\n", *cls) << "\n";);
-            // TRACE("wzh", tout << "[dynamic] sort clause" << std::endl;);
-            // std::sort(cls->begin(), cls->end(), lit_lt(*this));
-            // TRACE("nlsat_sort", display(tout << "#" << m_lemma_count << " after sort:\n", *cls) << "\n";);
+            TRACE("wzh", tout << "[dynamic] sort clause" << std::endl;);
+            std::sort(cls->begin(), cls->end(), lit_lt(*this));
+            TRACE("nlsat_sort", display(tout << "#" << m_lemma_count << " after sort:\n", *cls) << "\n";);
             if (learned && m_log_lemmas) {
                 log_lemma(verbose_stream(), *cls);
             }
@@ -1889,19 +1889,19 @@ namespace nlsat {
         lbool value(literal l) {
             lbool val = assigned_value(l);
             if (val != l_undef) {            
-                TRACE("nlsat_verbose", display(tout << " assigned value " << val << " for ", l) << "\n";);
+                // TRACE("nlsat_verbose", display(tout << " assigned value " << val << " for ", l) << "\n";);
                 return val;
             }
             bool_var b = l.var();
             atom * a = m_atoms[b];
             if (a == nullptr) {
-                TRACE("nlsat_verbose", display(tout << " no atom for ", l) << "\n";);
+                // TRACE("nlsat_verbose", display(tout << " no atom for ", l) << "\n";);
                 return l_undef;
             }
             // var max = a->max_var();
             // if (!m_assignment.is_assigned(max)) {
             if(!all_assigned_bool(b)){
-                TRACE("wzh", display(tout << "[dynamic] not all assigned ", l) << "\n";);
+                // TRACE("wzh", display(tout << "[dynamic] not all assigned ", l) << "\n";);
                 // TRACE("wzh", display_assignment(tout););
                 return l_undef;
             }
@@ -2399,11 +2399,11 @@ namespace nlsat {
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
-                        TRACE("wzh", tout << "[dynamic] before sort, show clauses for var " << m_xk << " ";
-                            m_display_var(tout, m_xk);
-                            tout << std::endl;
-                            display_clauses_ptr(tout, clauses);
-                        );
+                        // TRACE("wzh", tout << "[dynamic] before sort, show clauses for var " << m_xk << " ";
+                        //     m_display_var(tout, m_xk);
+                        //     tout << std::endl;
+                        //     display_clauses_ptr(tout, clauses);
+                        // );
                         sort_dynamic_clauses(clauses, m_xk);
                         TRACE("wzh", tout << "[dynamic] after sort, show clauses for var " << m_xk << " ";
                             m_display_var(tout, m_xk);
@@ -2854,11 +2854,11 @@ namespace nlsat {
                 SASSERT(value(ls[i]) == l_false);
                 if (assigned_value(l) == l_false) {
                     unsigned lvl = m_levels[b];
-                    TRACE("wzh", tout << "[debug] loop literal in max_scoped_lvl: ";
-                        display(tout, l);
-                        tout << std::endl;
-                        tout << "current level: " << m_levels[b] << std::endl;
-                    );
+                    // TRACE("wzh", tout << "[debug] loop literal in max_scoped_lvl: ";
+                    //     display(tout, l);
+                    //     tout << std::endl;
+                    //     tout << "current level: " << m_levels[b] << std::endl;
+                    // );
                     if (lvl > max)
                         max = lvl;
                 }
@@ -2888,17 +2888,17 @@ namespace nlsat {
                 SASSERT(is_marked(b));
                 SASSERT(value(lemma[i]) == l_false);
                 // if (assigned_value(l) == l_false && m_levels[b] == lvl && max_var(b) == m_xk) {
-                TRACE("wzh", tout << "[debug] loop literal: ";
-                        display(tout, l);
-                        tout << std::endl;
-                        tout << "current level: " << m_levels[b] << std::endl;
-                );
+                // TRACE("wzh", tout << "[debug] loop literal: ";
+                //         display(tout, l);
+                //         tout << std::endl;
+                //         tout << "current level: " << m_levels[b] << std::endl;
+                // );
                 // if (assigned_value(l) == l_false && m_levels[b] == lvl) {
                 if (assigned_value(l) == l_false && m_levels[b] == lvl && same_stage_bool(b, m_xk)) {
-                    TRACE("wzh", tout << "[debug] loop literal: ";
-                        display(tout, l);
-                        tout << std::endl;
-                    );
+                    // TRACE("wzh", tout << "[debug] loop literal: ";
+                    //     display(tout, l);
+                    //     tout << std::endl;
+                    // );
                     m_num_marks++;
                     continue;
                 }
@@ -3625,7 +3625,7 @@ namespace nlsat {
             m_cs_p.reset();
             for (unsigned i = 0; i < sz; i++) {
                 m_cs_p.push_back(i);
-                m_cs_degrees.push_back(degree_dynamic(*(cs[i]), x));
+                m_cs_degrees.push_back(degree_dynamic_clause(*(cs[i])));
             }
             std::sort(m_cs_p.begin(), m_cs_p.end(), degree_dynamic_lt(m_cs_degrees));
             TRACE("nlsat_reorder_clauses", tout << "permutation: "; ::display(tout, m_cs_p.begin(), m_cs_p.end()); tout << "\n";);
@@ -3633,7 +3633,8 @@ namespace nlsat {
             TRACE("nlsat_reorder_clauses", tout << "after:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
         }
 
-        unsigned degree_dynamic(atom const * a, var x) const {
+        unsigned degree_dynamic_atom(atom const * a) {
+            var x = max_stage_var(a);
             if (a->is_ineq_atom()) {
                 unsigned max = 0;
                 unsigned sz  = to_ineq_atom(a)->size();
@@ -3647,6 +3648,27 @@ namespace nlsat {
             else {
                 return m_pm.degree(to_root_atom(a)->p(), x);
             }
+        }
+
+        var max_stage_var(atom const * a) {
+            var_vector curr_vars = get_vars_atom(a);
+            if(curr_vars.empty()){
+                return null_var;
+            }
+            var res = curr_vars[0], max_stage = find_stage(res);
+            for(unsigned i = 1; i < curr_vars.size(); i++){
+                var cur = curr_vars[i];
+                var curr_stage = find_stage(cur);
+                if(curr_stage > max_stage){
+                    max_stage = curr_stage;
+                    res = cur;
+                }
+            }
+            return res;
+        }
+
+        var max_stage_var_clause(clause & c){
+
         }
 
         struct degree_dynamic_lt {
@@ -3666,15 +3688,16 @@ namespace nlsat {
         /**
            \brief Return the degree of the maximal variable in c
         */
-        unsigned degree_dynamic(clause const & c, var x) const {
-            if (x == null_var)
-                return 0;
+        unsigned degree_dynamic_clause(clause const & c) {
+            if(all_bool_clause(c)){
+                return null_var;
+            }
             unsigned max = 0;
             for (literal l : c) {
                 atom const * a  = m_atoms[l.var()];
                 if (a == nullptr)
                     continue;
-                unsigned d = degree_dynamic(a, x);
+                unsigned d = degree_dynamic_atom(a);
                 if (d > max)
                     max = d;
             }

@@ -1530,8 +1530,15 @@ namespace nlsat {
                     clause * conflict_clause;
                     if (m_xk == null_var)
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
-                    else 
+                    else {
+                        sort_clauses_by_degree(m_watches[m_xk].size(), m_watches[m_xk].data());
+                        TRACE("wzh", tout << "[dynamic] show clauses for var " << m_xk << " ";
+                            m_display_var(tout, m_xk);
+                            tout << std::endl;
+                            display_clauses_ptr(tout, m_watches[m_xk]);
+                        );
                         conflict_clause = process_clauses(m_watches[m_xk]);
+                    }
                     if (conflict_clause == nullptr)
                         break;
                     if (!resolve(*conflict_clause)) 
@@ -1551,6 +1558,16 @@ namespace nlsat {
                 }
             }
         }
+
+        // wzh
+        std::ostream & display_clauses_ptr(std::ostream & out, clause_vector const & cls) const {
+            for(clause * c: cls){
+                display(out, c);
+                out << std::endl;
+            }
+            return out;
+        }
+        // hzw
 
 
         lbool search_check() {
@@ -2163,6 +2180,7 @@ namespace nlsat {
                 
             }
             NLSAT_VERBOSE(display(verbose_stream(), *new_cls) << "\n";);
+            TRACE("wzh", tout << "[debug] enter process lemma" << std::endl;);
             if (!process_clause(*new_cls, true)) {
                 TRACE("nlsat", tout << "new clause triggered another conflict, restarting conflict resolution...\n";
                       display(tout, *new_cls) << "\n";
