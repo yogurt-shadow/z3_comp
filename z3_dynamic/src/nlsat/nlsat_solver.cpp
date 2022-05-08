@@ -509,6 +509,14 @@ namespace nlsat {
             return out;
         }
 
+        std::ostream & display_clauses_ptr(std::ostream & out, clause_vector const & cls) const {
+            for(clause * c: cls){
+                display(out, c);
+                out << std::endl;
+            }
+            return out;
+        }
+
         std::ostream & display_clause_vars(std::ostream & out) const {
             out << "[dynamic] show vars for clauses\n";
             for(bool_var i = 0; i < m_clauses.size(); i++){
@@ -2369,6 +2377,17 @@ namespace nlsat {
                         conflict_clause = process_clauses(m_bwatches[m_bk]);
                     else {
                         clause_vector clauses = find_max_var(m_xk);
+                        TRACE("wzh", tout << "[dynamic] before sort, show clauses for var " << m_xk << " ";
+                            m_display_var(tout, m_xk);
+                            tout << std::endl;
+                            display_clauses_ptr(tout, clauses);
+                        );
+                        sort_dynamic_clauses(clauses, m_xk);
+                        TRACE("wzh", tout << "[dynamic] after sort, show clauses for var " << m_xk << " ";
+                            m_display_var(tout, m_xk);
+                            tout << std::endl;
+                            display_clauses_ptr(tout, clauses);
+                        );
                         conflict_clause = process_clauses(clauses);
                     }
                     if (conflict_clause == nullptr)
@@ -3523,17 +3542,17 @@ namespace nlsat {
         //
         // -----------------------
         
-        struct degree_lt {
-            unsigned_vector & m_degrees;
-            degree_lt(unsigned_vector & ds):m_degrees(ds) {}
-            bool operator()(unsigned i1, unsigned i2) const { 
-                if (m_degrees[i1] < m_degrees[i2])
-                    return true;
-                if (m_degrees[i1] > m_degrees[i2])
-                    return false;
-                return i1 < i2;
-            }
-        };
+        // struct degree_lt {
+        //     unsigned_vector & m_degrees;
+        //     degree_lt(unsigned_vector & ds):m_degrees(ds) {}
+        //     bool operator()(unsigned i1, unsigned i2) const { 
+        //         if (m_degrees[i1] < m_degrees[i2])
+        //             return true;
+        //         if (m_degrees[i1] > m_degrees[i2])
+        //             return false;
+        //         return i1 < i2;
+        //     }
+        // };
 
         // unsigned_vector m_cs_degrees;
         // unsigned_vector m_cs_p;
@@ -3560,6 +3579,79 @@ namespace nlsat {
         //         sort_clauses_by_degree(ws.size(), ws.data());
         //     }
         // }
+
+        // wzh dynamic
+        unsigned_vector m_cs_degrees;
+        unsigned_vector m_cs_p;
+
+        void sort_dynamic_clauses(clause_vector & cls, var x) {
+            sort_clauses_by_degree_dynamic(cls.size(), cls.data(), x);
+        }
+
+        void sort_clauses_by_degree_dynamic(unsigned sz, clause ** cs, var x) {
+            if (sz <= 1)
+                return;
+            TRACE("nlsat_reorder_clauses", tout << "before:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
+            m_cs_degrees.reset();
+            m_cs_p.reset();
+            for (unsigned i = 0; i < sz; i++) {
+                m_cs_p.push_back(i);
+                m_cs_degrees.push_back(degree_dynamic(*(cs[i]), x));
+            }
+            std::sort(m_cs_p.begin(), m_cs_p.end(), degree_dynamic_lt(m_cs_degrees));
+            TRACE("nlsat_reorder_clauses", tout << "permutation: "; ::display(tout, m_cs_p.begin(), m_cs_p.end()); tout << "\n";);
+            apply_permutation(sz, cs, m_cs_p.data());
+            TRACE("nlsat_reorder_clauses", tout << "after:\n"; for (unsigned i = 0; i < sz; i++) { display(tout, *(cs[i])); tout << "\n"; });
+        }
+
+        unsigned degree_dynamic(atom const * a, var x) const {
+            if (a->is_ineq_atom()) {
+                unsigned max = 0;
+                unsigned sz  = to_ineq_atom(a)->size();
+                for (unsigned i = 0; i < sz; i++) {
+                    unsigned d = m_pm.degree(to_ineq_atom(a)->p(i), x);
+                    if (d > max)
+                        max = d;
+                }
+                return max;
+            }
+            else {
+                return m_pm.degree(to_root_atom(a)->p(), x);
+            }
+        }
+
+        struct degree_dynamic_lt {
+            unsigned_vector & m_degrees;
+            degree_dynamic_lt(unsigned_vector & ds):m_degrees(ds) {}
+            bool operator()(unsigned i1, unsigned i2) const { 
+                if (m_degrees[i1] < m_degrees[i2])
+                    return true;
+                if (m_degrees[i1] > m_degrees[i2])
+                    return false;
+                return i1 < i2;
+            }
+        };
+
+        // hzw dynamic
+
+        /**
+           \brief Return the degree of the maximal variable in c
+        */
+        unsigned degree_dynamic(clause const & c, var x) const {
+            if (x == null_var)
+                return 0;
+            unsigned max = 0;
+            for (literal l : c) {
+                atom const * a  = m_atoms[l.var()];
+                if (a == nullptr)
+                    continue;
+                unsigned d = degree_dynamic(a, x);
+                if (d > max)
+                    max = d;
+            }
+            return max;
+        }
+        // hzw dynamic
 
         // -----------------------
         //

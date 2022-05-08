@@ -1392,7 +1392,7 @@ namespace nlsat {
                 SASSERT(max != null_var);
                 normalize(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after normalization\n", m_core2) << "\n";);
-                simplify(m_core2, max);
+                // simplify(m_core2, max);
                 TRACE("nlsat_explain", display(tout << "core after simplify\n", m_core2) << "\n";);
                 main(m_core2.size(), m_core2.data());
                 m_core2.reset();

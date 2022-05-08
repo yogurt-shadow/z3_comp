@@ -1453,7 +1453,7 @@ namespace nlsat {
             else{
                 m_xk++;
             }
-            TRACE("wzh", tout << "[debug] select new arith var: " << m_xk << " ";
+            TRACE("wzh", tout << "[debug] select next arith var: " << m_xk << " ";
                 m_display_var(tout, m_xk);
                 tout << std::endl;
             );
