@@ -2353,7 +2353,8 @@ namespace nlsat {
                   display_mathematica_lemma(tout, core.size(), core.data(), true););
 
             m_lazy_clause.reset();
-            m_explain(jst.num_lits(), jst.lits(), m_lazy_clause);
+            // m_explain(jst.num_lits(), jst.lits(), m_lazy_clause);
+            m_explain(jst.num_lits(), jst.lits(), m_lazy_clause, m_infeasible);
             // tout << "exit explain\n";
             for (unsigned i = 0; i < sz; i++)
                 m_lazy_clause.push_back(~jst.lit(i));

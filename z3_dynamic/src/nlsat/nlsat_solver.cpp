@@ -3667,10 +3667,6 @@ namespace nlsat {
             return res;
         }
 
-        var max_stage_var_clause(clause & c){
-
-        }
-
         struct degree_dynamic_lt {
             unsigned_vector & m_degrees;
             degree_dynamic_lt(unsigned_vector & ds):m_degrees(ds) {}

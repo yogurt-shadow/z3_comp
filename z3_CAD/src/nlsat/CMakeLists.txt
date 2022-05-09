@@ -10,8 +10,6 @@ z3_add_component(nlsat
     nlsat_peo.cpp
     nlsat_cac.cpp
     nlsat_partial.cpp 
-    nlsat_subtropical.cpp
-    nlsat_incremental_cad.cpp
   COMPONENT_DEPENDENCIES
     polynomial
     sat

@@ -63,6 +63,9 @@ namespace nlsat {
         projection_manager m_ppm;
 
         bool m_sample;
+
+        bool m_partial_interval;
+        interval_set_vector m_infeasible;
         // hzw
 
 
@@ -194,6 +197,7 @@ namespace nlsat {
             m_nlcac = false;
             m_partial_project = false;
             m_sample = false;
+            m_partial_interval = false;
             // hzh switch
         }
         
@@ -1497,7 +1501,7 @@ namespace nlsat {
                 var curr_level = m_index[x];
                 // note: m_index counts from zero
                 if(m_partial_project && curr_level == level_x){
-                    TRACE("wzh", tout << "[nlcac] show result lemma before partial: " << std::endl;
+                    TRACE("wzh", tout << "[partial] show result lemma before partial: " << std::endl;
                         if(m_result == nullptr){
                             tout << "empty scoped literal vector" << std::endl;
                         }
@@ -1506,8 +1510,9 @@ namespace nlsat {
                         }
                         tout << std::endl;
                     );
+                    m_todo.reset();
                     m_ppm.mk_partial_lemma(m_vars, m_index, level_x, *m_result, m_already_added_literal);
-                    TRACE("wzh", tout << "[nlcac] show result lemma after partial: " << std::endl;
+                    TRACE("wzh", tout << "[partial] show result lemma after partial: " << std::endl;
                         if(m_result == nullptr){
                             tout << "empty scoped literal vector" << std::endl;
                         }
@@ -1521,6 +1526,173 @@ namespace nlsat {
             }
         }
         // hzw partial projection
+
+        // wzh partial interval projection
+        void project_interval_partial(polynomial_ref_vector & ps, var max_x) {
+            if (ps.empty()){
+                return;
+            }
+            m_todo.reset();
+            for (poly* p : ps) {
+                m_todo.insert(p);
+            } 
+            interval_set_manager & ism = m_evaluator.ism();
+            interval_set_ref curr(ism), new_st(ism);
+            var x = m_todo.remove_max_polys(ps);
+            // Remark: after vanishing coefficients are eliminated, ps may not contain max_x anymore
+            if (x < max_x){
+                curr = add_cell_lits_interval(ps, x);
+            }
+            while (true) {
+                if (all_univ(ps, x) && m_todo.empty()) {
+                    m_todo.reset();
+                    break;
+                }
+                 TRACE("nlsat_explain", tout << "project loop, processing var "; display_var(tout, x); tout << "\npolynomials\n";
+                      display(tout, ps); tout << "\n";);
+                add_lc(ps, x);
+                psc_discriminant(ps, x);
+                psc_resultant(ps, x);
+                if (m_todo.empty())
+                    break;
+                x = m_todo.remove_max_polys(ps);
+                curr = add_cell_lits_interval(ps, x);
+                if(m_partial_interval){
+                    new_st = ism.mk_union(curr, m_infeasible[x]);
+                    var curr_level = m_index[x];
+                    // interval is not full, we can return now
+                    TRACE("wzh", tout << "[partial interval] show cell interval:\n";
+                        ism.display(tout, curr);
+                        tout << "[partial interval] show infeasible interval:\n";
+                        ism.display(tout, m_infeasible[x]);
+                        tout << "[partial interval] show union interval:\n";
+                        ism.display(tout, new_st);
+                    );
+
+                    if(!ism.is_full(new_st)){
+                        TRACE("wzh", tout << "[partial interval] interval set is not full, early break" << std::endl;);
+                        TRACE("wzh", tout << "[partial interval] show result lemma before partial interval: " << std::endl;
+                            if(m_result == nullptr){
+                                tout << "empty scoped literal vector" << std::endl;
+                            }
+                            else{
+                                display(tout, *m_result);
+                            }
+                            tout << std::endl;
+                        );
+                        m_todo.reset();
+                        m_ppm.mk_partial_lemma(m_vars, m_index, curr_level, *m_result, m_already_added_literal);
+                        TRACE("wzh", tout << "[partial interval] show result lemma after partial interval: " << std::endl;
+                            if(m_result == nullptr){
+                                tout << "empty scoped literal vector" << std::endl;
+                            }
+                            else{
+                                display(tout, *m_result);
+                            }
+                            tout << std::endl;
+                        );
+                        return;
+                    }
+                    else{
+                        TRACE("wzh", tout << "[partial interval] interval set is full, continue loop" << std::endl;);
+                    }
+                }
+                // otherwise we continue while loop
+            }
+        }
+
+        interval_set * add_cell_lits_interval(polynomial_ref_vector & ps, var y) {
+            interval_set_manager & ism = m_evaluator.ism();
+            SASSERT(m_assignment.is_assigned(y));
+            bool lower_inf = true;
+            bool upper_inf = true;
+            scoped_anum_vector & roots = m_roots_tmp;
+            scoped_anum lower(m_am);
+            scoped_anum upper(m_am);
+            anum const & y_val = m_assignment.value(y);
+            TRACE("nlsat_explain", tout << "adding literals for "; display_var(tout, y); tout << " -> ";
+                  m_am.display_decimal(tout, y_val); tout << "\n";);
+            polynomial_ref p_lower(m_pm);
+            unsigned i_lower = UINT_MAX;
+            polynomial_ref p_upper(m_pm);
+            unsigned i_upper = UINT_MAX;
+            polynomial_ref p(m_pm);
+            unsigned sz = ps.size();
+            for (unsigned k = 0; k < sz; k++) {
+                p = ps.get(k);
+                if (max_var(p) != y)
+                    continue;
+                roots.reset();
+                // Variable y is assigned in m_assignment. We must temporarily unassign it.
+                // Otherwise, the isolate_roots procedure will assume p is a constant polynomial.
+                m_am.isolate_roots(p, undef_var_assignment(m_assignment, y), roots);
+                unsigned num_roots = roots.size();
+                for (unsigned i = 0; i < num_roots; i++) {
+                    int s = m_am.compare(y_val, roots[i]);
+                    TRACE("nlsat_explain", 
+                          m_am.display_decimal(tout << "comparing root: ", roots[i]); tout << "\n";
+                          m_am.display_decimal(tout << "with y_val:", y_val); 
+                          tout << "\nsign " << s << "\n";
+                          tout << "poly: " << p << "\n";
+                          );
+                    if (s == 0) {
+                        // y_val == roots[i]
+                        // add literal
+                        // ! (y = root_i(p))
+                        add_root_literal(atom::ROOT_EQ, y, i+1, p);
+                        return ism.mk(false, false, y_val, false, false, y_val, null_literal, nullptr);
+                    }
+                    else if (s < 0) {
+                        // y_val < roots[i]
+                        
+                        // check if roots[i] is a better upper bound
+                        if (upper_inf || m_am.lt(roots[i], upper)) {
+                            upper_inf = false;
+                            m_am.set(upper, roots[i]);
+                            p_upper = p;
+                            i_upper = i+1;
+                        }
+                    }
+                    else if (s > 0) {
+                        // roots[i] < y_val
+
+                        // check if roots[i] is a better lower bound
+                        if (lower_inf || m_am.lt(lower, roots[i])) {
+                            lower_inf = false;
+                            m_am.set(lower, roots[i]);
+                            p_lower = p;
+                            i_lower = i+1;
+                        }
+                    }
+                }
+            }
+
+            if (!lower_inf) {
+                add_root_literal(m_full_dimensional ? atom::ROOT_GE : atom::ROOT_GT, y, i_lower, p_lower);
+            }
+            if (!upper_inf) {
+                add_root_literal(m_full_dimensional ? atom::ROOT_LE : atom::ROOT_LT, y, i_upper, p_upper);
+            }
+            // wzh return interval
+            if(lower_inf && upper_inf){
+                return ism.mk(true, true, lower, true, true, upper, null_literal, nullptr);
+            }
+            else if(lower_inf && !upper_inf){
+                return ism.mk(true, true, lower, true, false, upper, null_literal, nullptr);
+            }
+            else if(!lower_inf && upper_inf){
+                return ism.mk(true, false, lower, true, true, upper, null_literal, nullptr);
+            }
+            else if(!lower_inf && !upper_inf){
+                return ism.mk(true, false, lower, true, false, upper, null_literal, nullptr);
+            }
+            else{
+                UNREACHABLE();
+                return ism.mk_empty();
+            }
+            // hzw return interval
+        }
+        // hzw partial interval projection
         
         /**
            \brief Apply model-based projection operation defined in our paper.
@@ -1990,6 +2162,7 @@ namespace nlsat {
             // wzh partial
             if(!m_assignment.is_all_rational()){
                 m_partial_project = false;
+                m_partial_interval = false;
             }
             // hzw partial
 
@@ -2059,6 +2232,13 @@ namespace nlsat {
                 TRACE("wzh", tout << "[partial] enter partial projection" << std::endl;);
                 project_partial(m_ps, max_x);
                 TRACE("wzh", tout << "[partial] exit partial projection" << std::endl;);
+            }
+            else if(m_partial_interval){
+                TRACE("wzh", tout << "[partial] use interval partial projection\n";);
+                collect_vars(m_ps);
+                TRACE("wzh", tout << "[partial] enter interval partial projection" << std::endl;);
+                project_interval_partial(m_ps, max_x);
+                TRACE("wzh", tout << "[partial] exit interval partial projection" << std::endl;);
             }
             else {
                 std::cout << "origin explain\n";
@@ -2178,7 +2358,7 @@ namespace nlsat {
             }
         }
       
-        void operator()(unsigned num, literal const * ls, scoped_literal_vector & result) {
+        void operator()(unsigned num, literal const * ls, scoped_literal_vector & result, interval_set_vector const & infeasible) {
             SASSERT(check_already_added());
             SASSERT(num > 0);
             TRACE("nlsat_explain", 
@@ -2187,11 +2367,10 @@ namespace nlsat {
                   m_assignment.display(tout);
                   );
 
-            TRACE("wzh", 
-                  tout << "[explain] set of literals is infeasible in the current interpretation\n"; 
-                  display(tout, num, ls) << "\n";
-                  m_assignment.display(tout);
-                  );
+            m_infeasible.reset();
+            for(auto ele: infeasible){
+                m_infeasible.push_back(ele);
+            }
 
             m_result = &result;
             process(num, ls);
@@ -2577,8 +2756,8 @@ namespace nlsat {
         m_imp->m_signed_project = f;
     }
 
-    void explain::operator()(unsigned n, literal const * ls, scoped_literal_vector & result) {
-        (*m_imp)(n, ls, result);
+    void explain::operator()(unsigned n, literal const * ls, scoped_literal_vector & result, interval_set_vector const & infeasible) {
+        (*m_imp)(n, ls, result, infeasible);
     }
 
     void explain::project(var x, unsigned n, literal const * ls, scoped_literal_vector & result) {

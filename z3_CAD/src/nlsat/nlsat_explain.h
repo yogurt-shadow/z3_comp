@@ -35,6 +35,8 @@ namespace nlsat {
     class evaluator;
 
     class explain {
+    typedef ptr_vector<interval_set> interval_set_vector;
+
     public:
         struct imp;
     private:
@@ -68,7 +70,9 @@ namespace nlsat {
                  - s_1, ..., s_m do not contain variable x.
                  - s_1, ..., s_m are false in the current interpretation
         */
-        void operator()(unsigned n, literal const * ls, scoped_literal_vector & result);
+        // void operator()(unsigned n, literal const * ls, scoped_literal_vector & result);
+
+        void operator()(unsigned n, literal const * ls, scoped_literal_vector & result, interval_set_vector const & m_infeasible);
 
         
         /**
