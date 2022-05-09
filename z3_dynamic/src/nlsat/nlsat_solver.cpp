@@ -468,7 +468,9 @@ namespace nlsat {
         std::ostream & display_clause_score(std::ostream & out) const {
             out << "[dynamic] display clause scores:\n";
             for(bool_var i = 0; i < m_clause_score.size(); i++){
-                out << "[dynamic] clause " << i << " score: " << m_clause_score[i] << std::endl;
+                out << "[dynamic] clause " << i << std::endl;
+                display(out, m_clauses[i]);
+                out << "score: " << m_clause_score[i] << std::endl;
             }
             out << std::endl;
             return out;
@@ -592,8 +594,19 @@ namespace nlsat {
             if(i >= m_clause_vars.size() || !m_clause_vars_cached[i]){
                 clause * cls = m_clauses[i];
                 var_vector m_vars = get_vars_clause_core(*cls);
-                m_clause_vars.setx(i, m_vars, var_vector(0));
-                m_clause_vars_cached.setx(i, true, false);
+                // m_clause_vars.setx(i, m_vars, var_vector(0));
+                // m_clause_vars_cached.setx(i, true, false);
+                if(i < m_clause_vars.size()){
+                    m_clause_vars[i] = m_vars;
+                    m_clause_vars_cached = true;
+                }
+                else if(i == m_clause_vars.size()){
+                    m_clause_vars.push_back(m_vars);
+                    m_clause_vars_cached.push_back(true);
+                }
+                else{
+                    UNREACHABLE();
+                }
             }
             return m_clause_vars[i];
         }
@@ -1008,16 +1021,31 @@ namespace nlsat {
         //     return m_assignment.is_assigned(a->m_x);
         // }
 
-        clause_vector find_max_var(var x){
-            clause_vector res;
-            for(clause * cls: m_clauses){
-                if(only_left_clause(*cls, x)){
-                    res.push_back(cls);
+        void collect_xclauses(){
+            m_xclauses.reset();
+            for(unsigned cls: m_var_clauses[m_xk]){
+                if(m_clause_score[cls] == 0){
+                    m_xclauses.push_back(cls);
                 }
             }
-            // for(var v: m_xclauses){
-            //     res.push_back(m_clauses[v]);
+        }
+
+        clause_vector find_max_var(var x){
+            clause_vector res;
+            // for(clause * cls: m_clauses){
+            //     if(only_left_clause(*cls, x)){
+            //         res.push_back(cls);
+            //     }
             // }
+            TRACE("wzh", tout << "[dynamic] find max var with score" << std::endl;);
+            TRACE("wzh", display_clause_score(tout);
+                display_dynamic(tout);
+            );
+            collect_xclauses();
+            for(var v: m_xclauses){
+                res.push_back(m_clauses[v]);
+            }
+
             for(clause * cls: m_learned){
                 if(only_left_clause(*cls, x)){
                     res.push_back(cls);
@@ -1628,11 +1656,15 @@ namespace nlsat {
                 m_learned.push_back(cls);
             else{
                 m_clauses.push_back(cls);
-                unsigned index = m_clauses.size() - 1;
-                TRACE("wzh", tout << "[dynamic] collect vars for clause " << index << std::endl;);
-                var_vector curr_vars = get_vars_clause(index);
-                m_clause_vars.setx(index, curr_vars, var_vector(0));
-                m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
+                // we do not collect vars here 
+                // because clause index may be changed after simplify
+
+                // unsigned index = m_clauses.size() - 1;
+                // TRACE("wzh", tout << "[dynamic] collect vars for clause " << index << std::endl;);
+                // var_vector curr_vars = get_vars_clause(index);
+                // m_clause_vars.setx(index, curr_vars, var_vector(0));
+                // m_clause_score.setx(index, curr_vars.size(), UINT_MAX);
+
                 SASSERT(m_clauses.size() == m_clause_vars.size());
             }
             // wzh dynamic
@@ -1713,7 +1745,7 @@ namespace nlsat {
                 tout << std::endl;
             );
             m_dynamic_vars.pop_back();
-            // increase_score();
+            increase_score();
             if(curr != null_var){
                 m_find_stage[curr] = UINT_MAX;
             }
@@ -2195,7 +2227,8 @@ namespace nlsat {
             // }
             // hzw dynamic
             select_next_arith_var();
-            // decrease_score();
+            decrease_score();
+            // TRACE("wzh", display_clause_vars(tout););
         }
 
         // wzh dynamic
@@ -2204,34 +2237,35 @@ namespace nlsat {
             if(m_xk == null_var){
                 return;
             }
-            for(bool_var b: m_var_atoms[m_xk]){
-                SASSERT(m_atom_score[b] >= 0);
-                m_atom_score[b]++;
-            }
+            // for(bool_var b: m_var_atoms[m_xk]){
+            //     SASSERT(m_atom_score[b] >= 0);
+            //     m_atom_score[b]++;
+            // }
             for(unsigned cls: m_var_clauses[m_xk]){
                 SASSERT(m_clause_score[cls] >= 0);
                 m_clause_score[cls]++;
             }
+            TRACE("wzh", display_clause_score(tout););
         }
 
 
         void decrease_score(){
-            m_xclauses.reset();
+            // m_xclauses.reset();
             if(m_xk == null_var){
                 return;
             }
-            for(bool_var b: m_var_atoms[m_xk]){
-                SASSERT(m_atom_score[b] > 0);
-                m_atom_score[b]--;
-            }
+            // for(bool_var b: m_var_atoms[m_xk]){
+            //     SASSERT(m_atom_score[b] > 0);
+            //     m_atom_score[b]--;
+            // }
             for(unsigned cls: m_var_clauses[m_xk]){
                 SASSERT(m_clause_score[cls] > 0);
                 m_clause_score[cls]--;
-                if(m_clause_score[cls] == 0){
-                    m_xclauses.push_back(cls);
-                }
+                // if(m_clause_score[cls] == 0){
+                //     m_xclauses.push_back(cls);
+                // }
             }
-            TRACE("wzh", display_dynamic(tout););
+            // TRACE("wzh", display_dynamic(tout););
             TRACE("wzh", tout << "[debug] show xclauses for m_xk " << m_xk << " ";
                 m_display_var(tout, m_xk);
                 tout << ":\n";
@@ -2240,6 +2274,7 @@ namespace nlsat {
                     tout << std::endl;
                 }
             );
+            TRACE("wzh", display_clause_score(tout););
         }
 
         // arith var heuristic
@@ -2503,7 +2538,7 @@ namespace nlsat {
 
             // clause index may be changed after simplify
             TRACE("wzh", tout << "[dynamic] enter collect var atoms" << std::endl;);
-            // collect_var_infos();
+            collect_var_infos();
             TRACE("wzh", tout << "[dynamic] exit collect var atoms" << std::endl;);
             TRACE("wzh", tout << "[dynamic] show clauses:\n";
                 display_all_clauses(tout);
@@ -2814,8 +2849,7 @@ namespace nlsat {
                 }
             });
             checkpoint();
-            // we do not resolve clause for dynamic orderings
-            // we just backtrack and continue search
+
             // wzh resolve learnt
             resolve_clause(b, m_lazy_clause.size(), m_lazy_clause.data());
             // hzw resolve learnt
@@ -3152,6 +3186,7 @@ namespace nlsat {
                 conflict_clause = new_cls;
                 goto start;
             }
+            TRACE("wzh", tout << "[debug] exit process lemma\n";);
             TRACE("nlsat_resolve_done", display_assignment(tout););
             return true;
         }
