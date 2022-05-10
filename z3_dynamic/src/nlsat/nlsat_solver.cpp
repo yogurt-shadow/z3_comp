@@ -159,6 +159,8 @@ namespace nlsat {
         typedef std::pair<var, var> clause_var;
         // clause with single variable
         vector<clause_var> m_unit_var_clauses;
+        // all assigned clauses
+        vector<clause_var> m_assigned_clauses;
         // hzw dynamic
 
 
@@ -311,6 +313,7 @@ namespace nlsat {
             m_var_watched_clauses.reset();
             m_clause_watched_var.reset();
             m_unit_var_clauses.reset();
+            m_assigned_clauses.reset();
             // hzw dynamic
         }
         
@@ -372,6 +375,7 @@ namespace nlsat {
             m_var_watched_clauses.reset();
             m_clause_watched_var.reset();
             m_unit_var_clauses.reset();
+            m_assigned_clauses.reset();
             // hzw dynamic
         }
 
@@ -466,11 +470,18 @@ namespace nlsat {
         std::ostream & display_unit_clauses(std::ostream & out) const {
             out << "[dynamic] show unit var clauses:\n";
             for(auto ele: m_unit_var_clauses){
-                display(out, m_clauses[ele.second]);
+                display(out, m_clauses[ele.first]);
             }
             return out;
         }
 
+        std::ostream & display_assigned_clauses(std::ostream & out) const {
+            out << "[dynamic] show assigned clauses:\n";
+            for(auto ele: m_assigned_clauses){
+                display(out, m_clauses[ele.first]);
+            }
+            return out;
+        }
 
         std::ostream & display_watched_clauses(std::ostream & out) const {
             out << "[dynamic] show watched clauses:\n";
@@ -1538,6 +1549,7 @@ namespace nlsat {
 
             m_var_watched_clauses.reset();
             m_unit_var_clauses.reset();
+            m_assigned_clauses.reset();
             // hzw dynamic
         }
 
@@ -2382,12 +2394,27 @@ namespace nlsat {
             return false;
         }
 
+        bool assigned_clause_contains(var x){
+            for(auto ele: m_assigned_clauses){
+                if(ele.first == x){
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void do_watched_clauses(var x){
             TRACE("wzh", tout << "[dynamic] do watched clauses for var " << x << " ";
                 m_display_var(tout, x);
             );
+            TRACE("wzh", 
+                tout << "[debug] before do watched clauses for var "  << x << std::endl;
+                display_watched_clauses(tout);
+                display_unit_clauses(tout);
+            );
             SASSERT(m_assignment.is_assigned(x));
             unsigned j = 0;
+            // watched clauses ==> unit clauses
             for(unsigned idx: m_var_watched_clauses[x]){
                 // ignore unit var clauses
                 if(unit_clause_contains(idx)){
@@ -2398,7 +2425,8 @@ namespace nlsat {
                 var next = select_watched_var(get_vars_clause(idx), other);
                 if(next == null_var){
                     // unit clause to other
-                    m_unit_var_clauses.push_back({idx, other});
+                    clause_var curr = {idx, other};
+                    m_unit_var_clauses.push_back(curr);
                     // still watch
                     m_var_watched_clauses[x][j++] = idx;
                 }
@@ -2411,8 +2439,23 @@ namespace nlsat {
                 }
             }
             m_var_watched_clauses[x].shrink(j);
-            TRACE("wzh", display_watched_clauses(tout);
+            j = 0;
+            // unit clauses ==> assigned clauses
+            for(auto ele: m_unit_var_clauses){
+                if(ele.second == x){
+                    m_assigned_clauses.push_back(ele);
+                }
+                else {
+                    m_unit_var_clauses[j++] = ele;
+                }
+            }
+            m_unit_var_clauses.shrink(j);
+
+            TRACE("wzh", 
+                tout << "[debug] after do watched clauses for var " << x << std::endl;
+                display_watched_clauses(tout);
                 display_unit_clauses(tout);
+                display_assigned_clauses(tout);
             );
         }
 
@@ -2420,21 +2463,44 @@ namespace nlsat {
             TRACE("wzh", tout << "[dynamic] undo watched clauses for var " << x << " ";
                 m_display_var(tout, x);
             );
+            TRACE("wzh", 
+                tout << "[debug] before undo watched clauses for var " << x << std::endl;
+                display_watched_clauses(tout);
+                display_unit_clauses(tout);
+            );
             SASSERT(!m_assignment.is_assigned(x));
+
+            // unit clauses ==> watched clauses
+            // unsigned j = 0;
+            // for(auto ele: m_unit_var_clauses){
+            //     if(!contains_clause(ele.first, x)){
+            //         m_unit_var_clauses[j++] = ele;
+            //     }
+            //     else{
+            //         // only left this var
+            //         if(ele.second == x){
+            //             m_unit_var_clauses[j++] = ele;
+            //         }
+            //         // we delete it from unit clauses
+            //     }
+            // }
+            // m_unit_var_clauses.shrink(j);
+
+            // assigned clauses ==> unit clauses
             unsigned j = 0;
-            for(auto ele: m_unit_var_clauses){
-                if(!contains_clause(ele.first, x)){
-                    m_unit_var_clauses[j++] = ele;
+            for(auto ele: m_assigned_clauses){
+                if(ele.second == x){
+                    m_unit_var_clauses.push_back(ele);
                 }
                 else{
-                    if(get_vars_clause(ele.first).size() == 1){
-                        m_unit_var_clauses[j++] = ele;
-                    }
-                    // we delete it from unit clauses
+                    m_assigned_clauses[j++] = ele;
                 }
             }
-            m_unit_var_clauses.shrink(j);
-            TRACE("wzh", display_watched_clauses(tout);
+            m_assigned_clauses.shrink(j);
+
+            TRACE("wzh", 
+                tout << "[debug] after undo watched clauses for var " << x << std::endl;
+                display_watched_clauses(tout);
                 display_unit_clauses(tout);
             );
         }
@@ -2806,13 +2872,16 @@ namespace nlsat {
                 // m_clause_score.setx(i, curr_vars.size(), UINT_MAX);
                 if(curr_vars.empty()){
                     // true
-                    m_clause_watched_var.push_back({});
+                    var_vector vars;
+                    m_clause_watched_var.push_back(vars);
+                    m_assigned_clauses.push_back({i, null_var});
                     continue;
                 }
                 else if(curr_vars.size() == 1){
                     // unit clause does not have watching vars
+                    var_vector vars;
                     m_unit_var_clauses.push_back({i, curr_vars[0]});
-                    m_clause_watched_var.push_back({});
+                    m_clause_watched_var.push_back(vars);
                 }
                 else{
                     var x1 = curr_vars[0];
