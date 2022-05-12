@@ -1163,9 +1163,9 @@ namespace nlsat {
             // }
 
             for(unsigned i = 0; i < m_learned.size(); i++){
-                if(!m_learnt_xvars[i].contains(x)){
-                    continue;
-                }
+                // if(!m_learnt_xvars[i].contains(x)){
+                //     continue;
+                // }
                 clause * cls = m_learned[i];
                 if(only_left_clause(*cls, x)){
                     res.push_back(cls);
@@ -1588,7 +1588,7 @@ namespace nlsat {
             m_var_watched_clauses.reset();
             m_unit_var_clauses.reset();
             m_assigned_clauses.reset();
-            m_learnt_xvars.reset();
+            // m_learnt_xvars.reset();
             // hzw dynamic
         }
 
@@ -1785,18 +1785,18 @@ namespace nlsat {
             }
             if (learned){
                 m_learned.push_back(cls);
-                var_vector curr;
-                for(unsigned i = 0; i < num_lits; i++){
-                    literal l = lits[i];
-                    if(!is_arith_literal(l)){
-                        continue;
-                    }
-                    atom * l_a = m_atoms[l.var()];
-                    if(l_a->is_root_atom()){
-                        curr.push_back(to_root_atom(l_a)->x());
-                    }
-                }
-                m_learnt_xvars.push_back(curr);
+                // var_vector curr;
+                // for(unsigned i = 0; i < num_lits; i++){
+                //     literal l = lits[i];
+                //     if(!is_arith_literal(l)){
+                //         continue;
+                //     }
+                //     atom * l_a = m_atoms[l.var()];
+                //     if(l_a->is_root_atom()){
+                //         curr.push_back(to_root_atom(l_a)->x());
+                //     }
+                // }
+                // m_learnt_xvars.push_back(curr);
             }
             else{
                 m_clauses.push_back(cls);
@@ -2463,6 +2463,7 @@ namespace nlsat {
                 tout << "[debug] before do watched clauses for var "  << x << std::endl;
                 display_watched_clauses(tout);
                 display_unit_clauses(tout);
+                display_assigned_clauses(tout);
             );
             SASSERT(m_assignment.is_assigned(x));
             unsigned j = 0;
@@ -2522,24 +2523,28 @@ namespace nlsat {
             );
             SASSERT(!m_assignment.is_assigned(x));
 
-            // unit clauses ==> watched clauses
-            // unsigned j = 0;
-            // for(auto ele: m_unit_var_clauses){
-            //     if(!contains_clause(ele.first, x)){
-            //         m_unit_var_clauses[j++] = ele;
-            //     }
-            //     else{
-            //         // only left this var
-            //         if(ele.second == x){
-            //             m_unit_var_clauses[j++] = ele;
-            //         }
-            //         // we delete it from unit clauses
-            //     }
-            // }
-            // m_unit_var_clauses.shrink(j);
+            // delete unit clauses
+            unsigned j = 0;
+            for(auto ele: m_unit_var_clauses){
+                if(!contains_clause(ele.first, x)){
+                    m_unit_var_clauses[j++] = ele;
+                }
+                else{
+                    // only left this var
+                    // if(ele.second == x){
+                    //     m_unit_var_clauses[j++] = ele;
+                    // }
+                    // else{
+                    // // we delete it from unit clauses
+                    // }
+                    
+                    // delete it from unit clause
+                }
+            }
+            m_unit_var_clauses.shrink(j);
 
             // assigned clauses ==> unit clauses
-            unsigned j = 0;
+            j = 0;
             for(auto ele: m_assigned_clauses){
                 if(ele.second == x){
                     m_unit_var_clauses.push_back(ele);
@@ -2561,23 +2566,23 @@ namespace nlsat {
         void select_next_arith_var(){
             // origin increasing arith order
             // TRACE("wzh", std::cout << "increasing" << std::endl;);
-            if(m_xk == null_var){
-                m_xk = 0;
-            }
-            else {
-                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-                if(m_dynamic_vars.size() >= num_vars()){
-                    m_xk = null_var;
-                }
-                else{
-                    m_xk++;
-                }
-            }
-            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-                m_display_var(tout, m_xk);
-                tout << " (increasing)" << std::endl;
-            );
-            m_dynamic_vars.push_back(m_xk);
+            // if(m_xk == null_var){
+            //     m_xk = 0;
+            // }
+            // else {
+            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+            //     if(m_dynamic_vars.size() >= num_vars()){
+            //         m_xk = null_var;
+            //     }
+            //     else{
+            //         m_xk++;
+            //     }
+            // }
+            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+            //     m_display_var(tout, m_xk);
+            //     tout << " (increasing)" << std::endl;
+            // );
+            // m_dynamic_vars.push_back(m_xk);
             // end increasing
 
             // used for test and debug
@@ -2602,18 +2607,18 @@ namespace nlsat {
             // used for test and debug
             // random select
             // TRACE("wzh", std::cout << "random" << std::endl;);
-            // if(m_dynamic_vars.size() >= num_vars()){
-            //     m_xk = null_var;
-            // }
-            // else {
-            //     m_xk = random_select();
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (random)" << std::endl;
-            //     tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
+            }
+            else {
+                m_xk = random_select();
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (random)" << std::endl;
+                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end random
 
             // begin heuristic
@@ -3836,20 +3841,20 @@ namespace nlsat {
             // for (clause* c : m_learned) {
             for(unsigned i = 0; i < m_learned.size(); i++){
                 clause * c = m_learned[i];
-                var_vector curr = m_learnt_xvars[i];
+                // var_vector curr = m_learnt_xvars[i];
                 if (has_root_atom(*c)) {
                     del_clause(c);
                 }
                 else {
                     // wzh dynamic
                     m_learned[j] = c;
-                    m_learnt_xvars[j] = curr;
+                    // m_learnt_xvars[j] = curr;
                     j++;
                     // hzw dynamic
                 }
             }
             m_learned.shrink(j);
-            m_learnt_xvars.shrink(j);
+            // m_learnt_xvars.shrink(j);
         }
 
         /** 
