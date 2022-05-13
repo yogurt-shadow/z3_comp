@@ -47,6 +47,23 @@ namespace nlsat {
     typedef chashtable<ineq_atom*, ineq_atom::hash_proc, ineq_atom::eq_proc> ineq_atom_table;
     typedef chashtable<root_atom*, root_atom::hash_proc, root_atom::eq_proc> root_atom_table;
 
+    // wzh dynamic
+    struct hash_var {
+        unsigned operator()(const var x) const {
+            return x;
+        }
+    };
+
+    struct eq_var {
+        bool operator()(const var x1, const var x2) const {
+            return x1 == x2;
+        }
+    };
+
+
+    typedef chashtable<var, hash_var, eq_var> var_table;
+    // hzw dynamic
+
     // for apply_permutation procedure
     void swap(clause * & c1, clause * & c2) {
         std::swap(c1, c2);
@@ -165,7 +182,14 @@ namespace nlsat {
         vector<var_vector> m_learnt_xvars;
         // hzw dynamic data structures
 
-        // wzh dynamic heuristic ds
+
+        // wzh switch
+        enum branching_order {
+            INC, DEC, RAND, VSIDS
+        } m_branching_order;
+        // hzw switch
+
+        // wzh dynamic heuristic VSIDS
         // arith var scores
         double_vector m_var_activity;
         // bump: the quantum of increase when learning a clause
@@ -174,7 +198,7 @@ namespace nlsat {
         const double decay_factor = 0.5;
         // implement decay every i conflicts
         const unsigned decay_period = 1;
-        // hzw dynamic heuristic ds
+        // hzw dynamic heuristic VSIDS
 
         // m_perm:     internal -> external
         // m_inv_perm: external -> internal
@@ -328,6 +352,10 @@ namespace nlsat {
 
             m_var_activity.reset();
             // hzw dynamic
+
+            // wzh switch
+            m_branching_order = VSIDS;
+            // hzw switch
         }
         
         ~imp() {
@@ -1891,6 +1919,7 @@ namespace nlsat {
             m_dynamic_vars.pop_back();
             // increase_clause_score();
             if(curr != null_var){
+                // erase find stage cache
                 m_find_stage[curr] = UINT_MAX;
             }
             if(m_dynamic_vars.empty()){
@@ -2563,50 +2592,50 @@ namespace nlsat {
         }
 
         // arith var heuristic
-        void select_next_arith_var(){
-            // origin increasing arith order
-            // TRACE("wzh", std::cout << "increasing" << std::endl;);
-            // if(m_xk == null_var){
-            //     m_xk = 0;
-            // }
-            // else {
-            //     TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
-            //     if(m_dynamic_vars.size() >= num_vars()){
-            //         m_xk = null_var;
-            //     }
-            //     else{
-            //         m_xk++;
-            //     }
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (increasing)" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
-            // end increasing
+        void select_inc_var(){
+            TRACE("wzh", tout << "increasing" << std::endl;);
+            if(m_xk == null_var){
+                m_xk = 0;
+            }
+            else {
+                TRACE("wzh", tout << "[debug] dynamic size: " << m_dynamic_vars.size() << std::endl;);
+                if(m_dynamic_vars.size() >= num_vars()){
+                    m_xk = null_var;
+                }
+                else{
+                    m_xk++;
+                }
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (increasing)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
+        }
 
-            // used for test and debug
-            // reverse select
-            // TRACE("wzh", std::cout << "decreasing" << std::endl;);
-            // if(m_dynamic_vars.size() >= num_vars()){
-            //     m_xk = null_var;
-            // }
-            // else if(m_xk == null_var) {
-            //     m_xk = num_vars() - 1;
-            // }
-            // else{
-            //     m_xk --;
-            // }
-            // TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
-            //     m_display_var(tout, m_xk);
-            //     tout << " (decreasing)" << std::endl;
-            // );
-            // m_dynamic_vars.push_back(m_xk);
+        void select_dec_var(){
+             // reverse select
+            TRACE("wzh", tout << "decreasing" << std::endl;);
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
+            }
+            else if(m_xk == null_var) {
+                m_xk = num_vars() - 1;
+            }
+            else{
+                m_xk --;
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (decreasing)" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
             // end reverse
-            
-            // used for test and debug
+        }
+
+        void select_rand_var(){
             // random select
-            // TRACE("wzh", std::cout << "random" << std::endl;);
+            TRACE("wzh", tout << "random" << std::endl;);
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2620,10 +2649,63 @@ namespace nlsat {
             );
             m_dynamic_vars.push_back(m_xk);
             // end random
+        }
 
-            // begin heuristic
-            
-            // end heuristic
+        void select_vsids_var(){
+            TRACE("wzh", tout << "VSIDS" << std::endl;);
+            if(m_dynamic_vars.size() >= num_vars()){
+                m_xk = null_var;
+            }
+            else{
+                m_xk = vsids_select();
+            }
+            TRACE("wzh", tout << "[dynamic] select next arith var: " << m_xk << " ";
+                m_display_var(tout, m_xk);
+                tout << " (vsids)" << std::endl;
+                tout << "[dynamic] currently " << m_dynamic_vars.size() << " th variable" << std::endl;
+            );
+            m_dynamic_vars.push_back(m_xk);
+        }
+
+        // select max activity unassigned var
+        var vsids_select(){
+            var res = null_var;
+            double max_act = 0;
+            for(var i = 0; i < num_vars(); i++){
+                if(m_assignment.is_assigned(i)){
+                    continue;
+                }
+                if(res == null_var || m_var_activity[i] > max_act){
+                    res = i;
+                    max_act = m_var_activity[i];
+                }
+            }
+            return res;
+        }
+
+
+        void select_next_arith_var(){
+            switch(m_branching_order){
+                case INC:
+                    select_inc_var();
+                    break;
+                
+                case DEC:
+                    select_dec_var();
+                    break;
+
+                case RAND:
+                    select_rand_var();
+                    break;
+
+                case VSIDS:
+                    select_vsids_var();
+                    break;
+
+                default:
+                    UNREACHABLE();
+                    break;
+            }
         }
 
         // randomly select next var
@@ -2632,7 +2714,8 @@ namespace nlsat {
             random_gen r(++m_random_seed);
             unsigned num = 1;
             for(unsigned i = 0; i < num_vars(); i++){
-                if(m_dynamic_vars.contains(i)){
+                // if(m_dynamic_vars.contains(i)){
+                if(m_assignment.is_assigned(i)){
                     continue;
                 }
                 int k = r() % num;
@@ -3380,6 +3463,18 @@ namespace nlsat {
                     top--;
                 }
 
+                // wzh activity
+                var_vector m_lemma_vars = get_vars_lts(m_lemma.size(), m_lemma.data());
+                for(var v: m_lemma_vars){
+                    m_var_activity[v] += bump;
+                }
+                if(m_conflicts % decay_period == 0){
+                    for(var v = 0; v < num_vars(); v++){
+                        m_var_activity[v] *= decay_factor;
+                    }
+                }
+                // hzw activity
+
                 // m_lemma is an implicating clause after backtracking current scope level.
                 if (found_decision){
                     TRACE("wzh", tout << "[debug] found decision" << std::endl;);
@@ -3533,17 +3628,17 @@ namespace nlsat {
         //
         // -----------------------
         
-        bool check_watches() const {
-            DEBUG_CODE(
-                for (var x = 0; x < num_vars(); x++) {
-                    clause_vector const & cs = m_watches[x];
-                    unsigned sz = cs.size();
-                    // for (unsigned i = 0; i < sz; i++) {
-                        // SASSERT(max_var(*(cs[i])) == x);
-                    // }
-                });
-            return true;
-        }
+        // bool check_watches() const {
+        //     DEBUG_CODE(
+        //         for (var x = 0; x < num_vars(); x++) {
+        //             clause_vector const & cs = m_watches[x];
+        //             unsigned sz = cs.size();
+        //             // for (unsigned i = 0; i < sz; i++) {
+        //                 // SASSERT(max_var(*(cs[i])) == x);
+        //             // }
+        //         });
+        //     return true;
+        // }
 
         bool check_bwatches() const {
             DEBUG_CODE(
@@ -3560,7 +3655,7 @@ namespace nlsat {
         }
 
         bool check_invariant() const {
-            SASSERT(check_watches());
+            // SASSERT(check_watches());
             SASSERT(check_bwatches());
             return true;
         }
