@@ -185,7 +185,7 @@ namespace nlsat {
 
         // wzh switch
         enum branching_order {
-            INC, DEC, RAND, VSIDS
+            INC, DEC, RAND, CVSIDS, MVSIDS
         } m_branching_order;
         // hzw switch
 
@@ -354,7 +354,7 @@ namespace nlsat {
             // hzw dynamic
 
             // wzh switch
-            m_branching_order = VSIDS;
+            m_branching_order = CVSIDS;
             // hzw switch
         }
         
@@ -510,6 +510,21 @@ namespace nlsat {
         // -----------------------
 
         // wzh dynamic main
+        bool is_vsids() const {
+            return m_branching_order == CVSIDS || m_branching_order == MVSIDS;
+        }
+
+        std::ostream & display_activity(std::ostream & out) const {
+            out << "[vsids] show activity:\n";
+            for(unsigned i = 0; i < num_vars(); i++){
+                out << "var " << i << " ";
+                m_display_var(out, i);
+                out << std::endl;
+                out << "activity: " << m_var_activity[i] << std::endl;
+            }
+            return out;
+        }
+
         std::ostream & display_learnt_xvars(std::ostream & out) const {
             out << "[dynamic] show xvars for learnt clauses:\n";
             for(unsigned i = 0; i < m_learnt_xvars.size(); i++){
@@ -2652,7 +2667,8 @@ namespace nlsat {
         }
 
         void select_vsids_var(){
-            TRACE("wzh", tout << "VSIDS" << std::endl;);
+            TRACE("wzh", tout << "VSIDS heuristic" << std::endl;);
+            TRACE("wzh", display_activity(tout););
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2698,7 +2714,8 @@ namespace nlsat {
                     select_rand_var();
                     break;
 
-                case VSIDS:
+                case CVSIDS:
+                case MVSIDS:
                     select_vsids_var();
                     break;
 
@@ -3016,6 +3033,16 @@ namespace nlsat {
                 //     m_var_clauses[v].push_back(i);
                 // }
                 // m_clause_score.setx(i, curr_vars.size(), UINT_MAX);
+
+                // wzh vsids init
+                if(is_vsids()){
+                    for(var v: curr_vars){
+                        m_var_activity[v] ++;
+                    }
+                }
+                // hzw vsids init
+
+
                 if(curr_vars.empty()){
                     // true
                     var_vector vars;
@@ -3463,17 +3490,28 @@ namespace nlsat {
                     top--;
                 }
 
-                // wzh activity
-                var_vector m_lemma_vars = get_vars_lts(m_lemma.size(), m_lemma.data());
-                for(var v: m_lemma_vars){
-                    m_var_activity[v] += bump;
-                }
-                if(m_conflicts % decay_period == 0){
-                    for(var v = 0; v < num_vars(); v++){
-                        m_var_activity[v] *= decay_factor;
+                TRACE("wzh", tout << "[debug] show lemma: \n";
+                    display(tout, m_lemma.size(), m_lemma.data());
+                    tout << std::endl;
+                    tout << "[debug] current m_xk: " << m_xk << std::endl;
+                );
+
+                // wzh vsids
+                if(m_branching_order == CVSIDS){
+                    var_vector m_lemma_vars = get_vars_lts(m_lemma.size(), m_lemma.data());
+                    for(var v: m_lemma_vars){
+                        m_var_activity[v] += bump;
                     }
+                    if(m_conflicts % decay_period == 0){
+                        for(var v = 0; v < num_vars(); v++){
+                            m_var_activity[v] *= decay_factor;
+                        }
+                    }
+                    TRACE("wzh", tout << "[vsids] show var activity after lemma:\n";
+                        display_activity(tout);
+                    );
                 }
-                // hzw activity
+                // hzw vsids
 
                 // m_lemma is an implicating clause after backtracking current scope level.
                 if (found_decision){
@@ -3484,11 +3522,6 @@ namespace nlsat {
                 // If lemma only contains literals from previous stages, then we can stop.
                 // We make progress by returning to a previous stage with additional information (new lemma)
                 // that forces us to select a new partial interpretation
-                TRACE("wzh", tout << "[debug] show lemma: \n";
-                    display(tout, m_lemma.size(), m_lemma.data());
-                    tout << std::endl;
-                    tout << "[debug] current m_xk: " << m_xk << std::endl;
-                );
                 if (only_literals_from_previous_stages(m_lemma.size(), m_lemma.data())){
                     TRACE("wzh", tout << "[debug] all literals from previous stages" << std::endl;);
                     break;
