@@ -33,6 +33,8 @@ Revision History:
 #include "nlsat/nlsat_evaluator.h"
 #include "nlsat/nlsat_explain.h"
 #include "nlsat/nlsat_params.hpp"
+#include "nlsat/nlsat_simple_checker.h"
+
 
 #define NLSAT_EXTRA_VERBOSE
 
@@ -198,6 +200,8 @@ namespace nlsat {
         const double decay_factor = 0.5;
         // implement decay every i conflicts
         const unsigned decay_period = 1;
+
+        bool m_linxi_simple_check;
         // hzw dynamic heuristic VSIDS
 
         // m_perm:     internal -> external
@@ -354,7 +358,7 @@ namespace nlsat {
             // hzw dynamic
 
             // wzh switch
-            m_branching_order = CVSIDS;
+            m_branching_order = INC;
             // hzw switch
         }
         
@@ -388,6 +392,8 @@ namespace nlsat {
             m_explain.set_minimize_cores(min_cores);
             m_explain.set_factor(p.factor());
             m_am.updt_params(p.p);
+
+            m_linxi_simple_check = p.linxi_simple_check();
         }
 
         void reset() {
@@ -2608,7 +2614,7 @@ namespace nlsat {
 
         // arith var heuristic
         void select_inc_var(){
-            TRACE("wzh", tout << "increasing" << std::endl;);
+            TRACE("wzh", std::cout << "increasing" << std::endl;);
             if(m_xk == null_var){
                 m_xk = 0;
             }
@@ -2630,7 +2636,7 @@ namespace nlsat {
 
         void select_dec_var(){
              // reverse select
-            TRACE("wzh", tout << "decreasing" << std::endl;);
+            TRACE("wzh", std::cout << "decreasing" << std::endl;);
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2650,7 +2656,7 @@ namespace nlsat {
 
         void select_rand_var(){
             // random select
-            TRACE("wzh", tout << "random" << std::endl;);
+            TRACE("wzh", std::cout << "random" << std::endl;);
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2667,7 +2673,7 @@ namespace nlsat {
         }
 
         void select_vsids_var(){
-            TRACE("wzh", tout << "VSIDS heuristic" << std::endl;);
+            TRACE("wzh", std::cout << "VSIDS heuristic" << std::endl;);
             TRACE("wzh", display_activity(tout););
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
@@ -2916,7 +2922,44 @@ namespace nlsat {
             return r;
         }
 
+        // simple check
+        bool simple_check() {
+            // test_anum();
+            literal_vector learned_unit;
+            // Simple_Checker checker(m_solver, m_pm, m_am, m_clauses, m_learned, m_atoms, m_is_int.size());
+            Simple_Checker checker(m_pm, m_am, m_clauses, learned_unit, m_atoms, m_is_int.size());
+            // TRACE("linxi_simple_checker", 
+            //     tout << "here" << std::endl;
+            // );
+            if (!checker())
+                return false;
+            for (unsigned i = 0, sz = learned_unit.size(); i < sz; ++i) {
+                clause *cla = mk_clause(1, &learned_unit[i], true, nullptr);
+                if (m_atoms[learned_unit[i].var()] == nullptr) {
+                    assign(learned_unit[i], mk_clause_jst(cla));
+                }
+                // decide(learned_unit[i]);
+            }
+            return true;
+        }
+        // simple check
+
         lbool check() {
+            // simple check
+            if (m_linxi_simple_check) {
+                if (!simple_check()) {
+                    TRACE("linxi_simple_check", tout << "real unsat\n";);
+                    return l_false;
+                }
+                TRACE("linxi_simple_checker_learned",
+                    tout << "simple check done\n";
+                );
+                // exit(0);
+                // return l_undef;
+            }
+            // simple check
+
+
             TRACE("nlsat_smt2", display_smt2(tout););
             TRACE("nlsat_fd", tout << "is_full_dimensional: " << is_full_dimensional() << "\n";);
             init_search();

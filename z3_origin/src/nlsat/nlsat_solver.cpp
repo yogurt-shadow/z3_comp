@@ -33,6 +33,8 @@ Revision History:
 #include "nlsat/nlsat_evaluator.h"
 #include "nlsat/nlsat_explain.h"
 #include "nlsat/nlsat_params.hpp"
+#include "nlsat/nlsat_simple_checker.h"
+
 
 #define NLSAT_EXTRA_VERBOSE
 
@@ -123,6 +125,10 @@ namespace nlsat {
         atom_vector            m_var2eq;     // var -> to asserted equality
         var_vector             m_perm;       // var -> var permutation of the variables
         var_vector             m_inv_perm;
+
+
+        bool m_linxi_simple_check;
+
         // m_perm:     internal -> external
         // m_inv_perm: external -> internal
         struct perm_display_var_proc : public display_var_proc {
@@ -283,6 +289,8 @@ namespace nlsat {
             m_explain.set_minimize_cores(min_cores);
             m_explain.set_factor(p.factor());
             m_am.updt_params(p.p);
+
+            m_linxi_simple_check = p.linxi_simple_check();
         }
 
         void reset() {
@@ -1622,8 +1630,45 @@ namespace nlsat {
             return r;
         }
 
+        // simple check
+        bool simple_check() {
+            // test_anum();
+            literal_vector learned_unit;
+            // Simple_Checker checker(m_solver, m_pm, m_am, m_clauses, m_learned, m_atoms, m_is_int.size());
+            Simple_Checker checker(m_pm, m_am, m_clauses, learned_unit, m_atoms, m_is_int.size());
+            // TRACE("linxi_simple_checker", 
+            //     tout << "here" << std::endl;
+            // );
+            if (!checker())
+                return false;
+            for (unsigned i = 0, sz = learned_unit.size(); i < sz; ++i) {
+                clause *cla = mk_clause(1, &learned_unit[i], true, nullptr);
+                if (m_atoms[learned_unit[i].var()] == nullptr) {
+                    assign(learned_unit[i], mk_clause_jst(cla));
+                }
+                // decide(learned_unit[i]);
+            }
+            return true;
+        }
+        // simple check
+
 
         lbool check() {
+
+             // simple check
+            if (m_linxi_simple_check) {
+                if (!simple_check()) {
+                    TRACE("linxi_simple_check", tout << "real unsat\n";);
+                    return l_false;
+                }
+                TRACE("linxi_simple_checker_learned",
+                    tout << "simple check done\n";
+                );
+                // exit(0);
+                // return l_undef;
+            }
+            // simple check
+            
             TRACE("nlsat_smt2", display_smt2(tout););
             TRACE("nlsat_fd", tout << "is_full_dimensional: " << is_full_dimensional() << "\n";);
             init_search();
