@@ -7,6 +7,8 @@ z3_add_component(nlsat
     nlsat_solver.cpp
     nlsat_types.cpp
     nlsat_simple_checker.cpp
+    nlsat_partial.cpp
+    nlsat_equal.cpp
   COMPONENT_DEPENDENCIES
     polynomial
     sat
