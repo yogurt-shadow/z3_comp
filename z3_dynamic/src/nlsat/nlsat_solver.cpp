@@ -182,6 +182,8 @@ namespace nlsat {
         vector<clause_var> m_assigned_clauses;
         // learnt clause ==> central vars
         vector<var_vector> m_learnt_xvars;
+        // variables in conflict analysis
+        var_vector m_conflict_vars;
         // hzw dynamic data structures
 
 
@@ -438,7 +440,10 @@ namespace nlsat {
         }
 
         void checkpoint() {
-            if (!m_rlimit.inc()) throw solver_exception(m_rlimit.get_cancel_msg()); 
+            if (!m_rlimit.inc()) {
+                TRACE("wzh", tout << "[checkpoint] throw limit cancel message" << std::endl;);
+                throw solver_exception(m_rlimit.get_cancel_msg()); 
+            }
             if (memory::get_allocation_size() > m_max_memory) throw solver_exception(Z3_MAX_MEMORY_MSG);
         }
 
@@ -1182,12 +1187,12 @@ namespace nlsat {
         clause_vector find_max_var(var x){
             clause_vector res;
 
-            // TRACE("wzh", tout << "[dynamic] find max var with loop" << std::endl;);
-            // for(clause * cls: m_clauses){
-            //     if(only_left_clause(*cls, x)){
-            //         res.push_back(cls);
-            //     }
-            // }
+            TRACE("wzh", tout << "[dynamic] find max var with loop" << std::endl;);
+            for(clause * cls: m_clauses){
+                if(only_left_clause(*cls, x)){
+                    res.push_back(cls);
+                }
+            }
 
             // TRACE("wzh", tout << "[dynamic] find max var with score" << std::endl;);
             // TRACE("wzh", display_clause_score(tout);
@@ -1198,12 +1203,12 @@ namespace nlsat {
             //     res.push_back(m_clauses[v]);
             // }
 
-            TRACE("wzh", tout << "[dynamic] find max var with watched var" << std::endl;);
-            for(auto ele: m_unit_var_clauses){
-                if(ele.second == x){
-                    res.push_back(m_clauses[ele.first]);
-                }
-            }
+            // TRACE("wzh", tout << "[dynamic] find max var with watched var" << std::endl;);
+            // for(auto ele: m_unit_var_clauses){
+            //     if(ele.second == x){
+            //         res.push_back(m_clauses[ele.first]);
+            //     }
+            // }
             
             // for(clause * cls: m_learned){
             //     if(only_left_clause(*cls, x)){
@@ -2614,7 +2619,7 @@ namespace nlsat {
 
         // arith var heuristic
         void select_inc_var(){
-            TRACE("wzh", std::cout << "increasing" << std::endl;);
+            TRACE("wzh", tout << "increasing" << std::endl;);
             if(m_xk == null_var){
                 m_xk = 0;
             }
@@ -2636,7 +2641,7 @@ namespace nlsat {
 
         void select_dec_var(){
              // reverse select
-            TRACE("wzh", std::cout << "decreasing" << std::endl;);
+            TRACE("wzh", tout << "decreasing" << std::endl;);
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2656,7 +2661,7 @@ namespace nlsat {
 
         void select_rand_var(){
             // random select
-            TRACE("wzh", std::cout << "random" << std::endl;);
+            TRACE("wzh", tout << "random" << std::endl;);
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
             }
@@ -2673,7 +2678,7 @@ namespace nlsat {
         }
 
         void select_vsids_var(){
-            TRACE("wzh", std::cout << "VSIDS heuristic" << std::endl;);
+            TRACE("wzh", tout << "VSIDS heuristic" << std::endl;);
             TRACE("wzh", display_activity(tout););
             if(m_dynamic_vars.size() >= num_vars()){
                 m_xk = null_var;
@@ -2818,6 +2823,7 @@ namespace nlsat {
                     return l_true;
                 }
                 while (true) {
+                    TRACE("wzh", tout << "[dynamic] enter while loop\n";);
                     // TRACE("nlsat_verbose", tout << "processing variable "; 
                     //       if (m_xk != null_var) {
                     //           m_display_var(tout, m_xk); tout << " " << m_watches[m_xk].size();
@@ -2826,6 +2832,7 @@ namespace nlsat {
                     //           tout << m_bwatches[m_bk].size() << " boolean b" << m_bk;
                     //       }
                     //       tout << "\n";);
+
                     checkpoint();
                     clause * conflict_clause;
                     if (m_xk == null_var)
@@ -3007,6 +3014,8 @@ namespace nlsat {
             //     }
             // );
             // hzw reorder static
+
+            TRACE("wzh", tout << "show var order:\n"; display_vars(tout););
 
             // sort_watched_clauses();
 
@@ -3228,6 +3237,13 @@ namespace nlsat {
         void process_antecedent(literal antecedent) {
             checkpoint();
             bool_var b  = antecedent.var();
+            // wzh vsids
+            for(var v: get_vars_bool(b)){
+                if(!m_conflict_vars.contains(v)){
+                    m_conflict_vars.push_back(v);
+                }
+            }
+            // hzw vsids
             TRACE("nlsat_resolve", display(tout << "resolving antecedent: ", antecedent) << "\n";);
             if (assigned_value(antecedent) == l_undef) {
                 checkpoint();
@@ -3269,6 +3285,14 @@ namespace nlsat {
             TRACE("nlsat_proof", tout << "resolving "; if (b != null_bool_var) display_atom(tout, b) << "\n"; display(tout, sz, c); tout << "\n";);
             TRACE("nlsat_proof_sk", tout << "resolving "; if (b != null_bool_var) tout << "b" << b; tout << "\n"; display_abst(tout, sz, c); tout << "\n";); 
 
+            // wzh vsids
+            for(var v: get_vars_lts(sz, c)){
+                if(!m_conflict_vars.contains(v)){
+                    m_conflict_vars.push_back(v);
+                }
+            }
+            // hzw vsids
+
             for (unsigned i = 0; i < sz; i++) {
                 if (c[i].var() != b)
                     process_antecedent(c[i]);
@@ -3301,6 +3325,14 @@ namespace nlsat {
             // hzw dynamic
             for (unsigned i = 0; i < sz; i++)
                 m_lazy_clause.push_back(~jst.lit(i));
+
+            // wzh vsids
+            for(var v: get_vars_lts(m_lazy_clause.size(), m_lazy_clause.data())){
+                if(!m_conflict_vars.contains(v)){
+                    m_conflict_vars.push_back(v);
+                }
+            }
+            // hzw vsids
             
             // lazy clause is a valid clause
             TRACE("nlsat_mathematica", display_mathematica_lemma(tout, m_lazy_clause.size(), m_lazy_clause.data()););            
@@ -3483,6 +3515,9 @@ namespace nlsat {
             SASSERT(check_marks());
             TRACE("nlsat_proof", tout << "STARTING RESOLUTION\n";);
             TRACE("nlsat_proof_sk", tout << "STARTING RESOLUTION\n";);
+            // wzh vsids
+            m_conflict_vars.reset();
+            // hzw vsids
             m_conflicts++;
             TRACE("nlsat", tout << "resolve, conflicting clause:\n"; display(tout, *conflict_clause) << "\n";
                   tout << "xk: "; if (m_xk != null_var) m_display_var(tout, m_xk); else tout << "<null>"; tout << "\n";
@@ -3506,6 +3541,13 @@ namespace nlsat {
                     SASSERT(t.m_kind != trail::NEW_STAGE); // we only mark literals that are in the same stage
                     if (t.m_kind == trail::BVAR_ASSIGNMENT) {
                         bool_var b = t.m_b;
+                        // wzh vsids
+                        for(var v: get_vars_bool(b)){
+                            if(!m_conflict_vars.contains(v)){
+                                m_conflict_vars.push_back(v);
+                            }
+                        }
+                        // hzw vsids
                         if (is_marked(b)) {
                             TRACE("nlsat_resolve", tout << "found marked: b" << b << "\n"; display_atom(tout, b) << "\n";);
                             m_num_marks--;
@@ -3550,7 +3592,20 @@ namespace nlsat {
                             m_var_activity[v] *= decay_factor;
                         }
                     }
-                    TRACE("wzh", tout << "[vsids] show var activity after lemma:\n";
+                    TRACE("wzh", tout << "[cvsids] show var activity after lemma:\n";
+                        display_activity(tout);
+                    );
+                }
+                else if(m_branching_order == MVSIDS){
+                    for(var v: m_conflict_vars){
+                        m_var_activity[v] += bump;
+                    }
+                    if(m_conflicts % decay_period == 0){
+                        for(var v = 0; v < num_vars(); v++){
+                            m_var_activity[v] *= decay_factor;
+                        }
+                    }
+                    TRACE("wzh", tout << "[mvsids] show var activity after lemma:\n";
                         display_activity(tout);
                     );
                 }
